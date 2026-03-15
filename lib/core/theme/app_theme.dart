@@ -32,8 +32,9 @@ class AppTheme {
             shadowColor: AppColors.blue600.withOpacity(0.4),
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.lg,
-              vertical: AppSpacing.sm,
+              vertical: AppSpacing.md,
             ),
+            minimumSize: const Size(0, 48),
             shape: RoundedRectangleBorder(
               borderRadius: AppRadius.radiusMd,
             ),
@@ -75,7 +76,7 @@ class AppTheme {
           ),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
-            vertical: AppSpacing.sm,
+            vertical: AppSpacing.md,
           ),
         ),
     cardTheme: CardThemeData(
@@ -83,7 +84,17 @@ class AppTheme {
       shadowColor: Colors.black26,
       shape: RoundedRectangleBorder(borderRadius: AppRadius.radiusLg),
       color: Colors.white,
+      margin: const EdgeInsets.only(bottom: AppSpacing.listItemGap),
+      clipBehavior: Clip.antiAlias,
     ),
+        listTileTheme: ListTileThemeData(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.xs,
+          ),
+          minLeadingWidth: 40,
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.radiusMd),
+        ),
         chipTheme: ChipThemeData(
           backgroundColor: AppColors.blue50,
           selectedColor: AppColors.blue200,
@@ -123,8 +134,9 @@ class AppTheme {
             shadowColor: AppColors.cyan500.withOpacity(0.5),
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.lg,
-              vertical: AppSpacing.sm,
+              vertical: AppSpacing.md,
             ),
+            minimumSize: const Size(0, 48),
             shape: RoundedRectangleBorder(
               borderRadius: AppRadius.radiusMd,
             ),
@@ -166,7 +178,7 @@ class AppTheme {
           ),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
-            vertical: AppSpacing.sm,
+            vertical: AppSpacing.md,
           ),
         ),
     cardTheme: CardThemeData(
@@ -174,7 +186,17 @@ class AppTheme {
       shadowColor: Colors.black45,
       shape: RoundedRectangleBorder(borderRadius: AppRadius.radiusLg),
       color: AppColors.neutral100Dark,
+      margin: const EdgeInsets.only(bottom: AppSpacing.listItemGap),
+      clipBehavior: Clip.antiAlias,
     ),
+        listTileTheme: ListTileThemeData(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.xs,
+          ),
+          minLeadingWidth: 40,
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.radiusMd),
+        ),
       );
 
   static ColorScheme get _lightColorScheme => ColorScheme.light(

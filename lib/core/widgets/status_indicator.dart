@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_radius.dart';
+import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 
-/// Vertical bar showing reservation status color. Use as ListTile leading.
+/// Vertical bar showing reservation status color. Use as a card accent.
 class StatusIndicator extends StatelessWidget {
   const StatusIndicator({
     super.key,
@@ -28,6 +30,30 @@ class StatusIndicator extends StatelessWidget {
       default:
         return AppColors.neutral600;
     }
+  }
+
+  /// Compact colored pill — use where a text badge is clearer than a bar.
+  static Widget badge(String status) {
+    final color = colorFor(status);
+    final label = status.isEmpty
+        ? '—'
+        : status[0].toUpperCase() + status.substring(1).toLowerCase();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          color: color,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
   }
 
   @override

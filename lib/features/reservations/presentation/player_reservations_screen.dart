@@ -24,6 +24,20 @@ import '../../reservation_change/domain/reservation_change_providers.dart';
 import '../../reservation_change/presentation/widgets/reservation_change_modal.dart';
 import '../data/reservation_model.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _kHorizontalPadding = 16.0;
+const _kSectionSpacing = 20.0;
+const _kCardRadius = 16.0;
+const _kChipHeight = 32.0;
+const _kWideBreakpoint = 640.0;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Screen
+// ─────────────────────────────────────────────────────────────────────────────
+
 class PlayerReservationsScreen extends ConsumerStatefulWidget {
   const PlayerReservationsScreen({super.key});
 
@@ -33,22 +47,21 @@ class PlayerReservationsScreen extends ConsumerStatefulWidget {
 }
 
 class _PlayerReservationsScreenState
-    extends ConsumerState<PlayerReservationsScreen> {
+    extends ConsumerState<PlayerReservationsScreen>
+    with SingleTickerProviderStateMixin {
+  // ── date helpers ──────────────────────────────────────────────────────────
   static DateTime get _today {
     final n = DateTime.now();
     return DateTime(n.year, n.month, n.day);
   }
-  static DateTime get _lastDay => DateTime(_today.year + 1, _today.month, _today.day);
 
+  static DateTime get _lastDay =>
+      DateTime(_today.year + 1, _today.month, _today.day);
+
+  // ── state ─────────────────────────────────────────────────────────────────
   late DateTime _focusedDay;
   late DateTime _selectedDay;
 
-  @override
-  void initState() {
-    super.initState();
-    _focusedDay = _today;
-    _selectedDay = _today;
-  }
   Court? _singleCourt;
   Category? _selectedCategory;
   TimeOfDay? _startTime;
@@ -57,37 +70,274 @@ class _PlayerReservationsScreenState
   final _playersCtrl = TextEditingController(text: '10');
   bool _booking = false;
   String? _error;
-  /// Status filter for reservations list: null or 'ALL' = all, else PENDING, APPROVED, REJECTED, CANCELLED
   String? _reservationStatusFilter;
   bool _calendarExpanded = true;
 
-  static const double _wideLayoutBreakpoint = 600;
+  // Tab controller for narrow layout
+  late TabController _tabController;
 
-  Widget _buildFormSection(WidgetRef ref) {
+  @override
+  void initState() {
+    super.initState();
+    _focusedDay = _today;
+    _selectedDay = _today;
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _eventCtrl.dispose();
+    _playersCtrl.dispose();
+    super.dispose();
+  }
+
+  // ── helpers ───────────────────────────────────────────────────────────────
+  String _formatTime(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  List<int> availableEndsFor(
+      List<({String start, String end})> occupied, int startHour) {
+    final startStr = '${startHour.toString().padLeft(2, '0')}:00';
+    return [
+      for (var h = startHour + 1; h <= 23; h++)
+        if (!slotOverlaps(startStr, '${h.toString().padLeft(2, '0')}:00', occupied)) h
+    ];
+  }
+
+  bool _validateSlotWithOccupied(
+      List<({String start, String end})> occupied) {
+    if (_startTime == null || _endTime == null) return false;
+    final s = _formatTime(_startTime!);
+    final e = _formatTime(_endTime!);
+    if (s.compareTo(e) >= 0) return false;
+    return !slotOverlaps(s, e, occupied);
+  }
+
+  static const List<int> _bookingHours = [
+    6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22
+  ];
+
+  static const List<String> _statusOptions = [
+    'ALL', 'PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'ADMIN',
+  ];
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Build
+  // ─────────────────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    final reservationsAsync = ref.watch(myReservationsProvider);
+    final width = MediaQuery.sizeOf(context).width;
+    final isWide = width >= _kWideBreakpoint;
+    final profileAsync = ref.watch(currentUserProfileProvider);
+    final role = profileAsync.valueOrNull?['role']?.toString().toLowerCase();
+    final isAdmin = role == 'admin';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      appBar: _buildAppBar(isAdmin),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: isDark
+              ? AppColors.surfaceGradientDark
+              : const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFE0F2FE), Color(0xFFF0F9FF), Color(0xFFE0F2FE)],
+          ),
+        ),
+        child: isWide
+            ? _buildWideLayout(reservationsAsync)
+            : _buildNarrowLayout(reservationsAsync),
+      ),
+    );
+  }
+
+  // ── AppBar ────────────────────────────────────────────────────────────────
+  PreferredSizeWidget _buildAppBar(bool isAdmin) {
+    return GradientAppBar(
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'My Reservations',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+              letterSpacing: 0.3,
+            ),
+          ),
+          if (isAdmin) ...[
+            const SizedBox(width: 8),
+            _AdminBadge(),
+          ],
+        ],
+      ),
+      actions: [
+        if (isAdmin)
+          IconButton(
+            icon: const Icon(Icons.dashboard_rounded, color: Colors.white, size: 22),
+            tooltip: 'Admin Dashboard',
+            onPressed: () => context.push('/admin'),
+          ),
+        IconButton(
+          icon: const Icon(Icons.notifications_rounded, color: Colors.white, size: 22),
+          tooltip: 'Notifications',
+          onPressed: () => context.push('/notifications'),
+        ),
+        IconButton(
+          icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 22),
+          tooltip: 'Logout',
+          onPressed: () async {
+            await ref.read(authRepositoryProvider).signOut();
+            if (mounted) context.go('/login');
+          },
+        ),
+        const AppBarThemeToggle(),
+      ],
+    );
+  }
+
+  // ── Layouts ───────────────────────────────────────────────────────────────
+
+  Widget _buildWideLayout(AsyncValue<List<Reservation>> reservationsAsync) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(
+              horizontal: _kHorizontalPadding,
+              vertical: _kSectionSpacing,
+            ),
+            child: _buildBookingForm(),
+          ),
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(
+          child: reservationsAsync.when(
+            data: (res) => _buildReservationsSection(res),
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => _buildErrorState(e.toString()),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNarrowLayout(AsyncValue<List<Reservation>> reservationsAsync) {
+    return Column(
+      children: [
+        // Tab bar
+        Material(
+          color: Colors.transparent,
+          child: TabBar(
+            controller: _tabController,
+            indicatorColor: AppColors.blue600,
+            labelColor: AppColors.blue600,
+            unselectedLabelColor: AppColors.neutral600,
+            labelStyle: AppTypography.labelMedium.copyWith(fontWeight: FontWeight.w600),
+            tabs: const [
+              Tab(icon: Icon(Icons.add_circle_outline_rounded, size: 20), text: 'Book'),
+              Tab(icon: Icon(Icons.event_note_rounded, size: 20), text: 'My Bookings'),
+            ],
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              // ── Tab 0: Booking form ────────────────────────────────────────
+              SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: _kHorizontalPadding,
+                  vertical: _kSectionSpacing,
+                ),
+                child: _buildBookingForm(),
+              ),
+              // ── Tab 1: Reservations list ───────────────────────────────────
+              reservationsAsync.when(
+                data: (res) => _buildReservationsSection(res),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => _buildErrorState(e.toString()),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildErrorState(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(_kHorizontalPadding),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline_rounded, color: AppColors.error, size: 40),
+            const SizedBox(height: 12),
+            Text(
+              'Something went wrong',
+              style: AppTypography.titleSmall,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              message,
+              style: AppTypography.bodySmall.copyWith(color: AppColors.neutral600),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Booking Form
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildBookingForm() {
     final courtsAsync = ref.watch(courtsListProvider);
     final categoriesAsync = ref.watch(categoriesListProvider);
-    final padding = MediaQuery.sizeOf(context).width < 400 ? AppSpacing.paddingSm : AppSpacing.paddingMd;
-    return ListView(
-      shrinkWrap: true,
-      padding: padding,
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // ── Section header ─────────────────────────────────────────────────
+        _SectionHeader(
+          icon: Icons.add_circle_rounded,
+          title: 'New Reservation',
+        ),
+        const SizedBox(height: _kSectionSpacing),
+
+        // ── Venue status ───────────────────────────────────────────────────
         courtsAsync.when(
           data: (courts) {
             _singleCourt ??= courts.isNotEmpty ? courts.first : null;
             if (courts.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: Text(
-                  'No venue configured. Add a court in Admin.',
-                  style: AppTypography.bodySmall.copyWith(color: AppColors.neutral600),
-                ),
+              return _InfoBanner(
+                icon: Icons.info_outline_rounded,
+                message: 'No venue configured. Add a court in Admin.',
+                color: AppColors.neutral600,
               );
             }
-            return const SizedBox.shrink();
+            return _VenuePill(name: courts.first.name);
           },
-          loading: () => const LinearProgressIndicator(),
-          error: (e, st) => Text('Error loading venue: $e'),
+          loading: () => const _LoadingRow(label: 'Loading venue…'),
+          error: (e, _) => _InfoBanner(
+            icon: Icons.error_outline_rounded,
+            message: 'Error loading venue: $e',
+            color: AppColors.error,
+          ),
         ),
+        const SizedBox(height: 12),
+
+        // ── Category dropdown ──────────────────────────────────────────────
         categoriesAsync.when(
           data: (categories) {
             if (categories.isEmpty) {
@@ -96,48 +346,47 @@ class _PlayerReservationsScreenState
                   if (mounted) setState(() => _selectedCategory = null);
                 });
               }
-              return Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: Text(
-                  'No categories. Add categories in Admin.',
-                  style: AppTypography.bodySmall.copyWith(color: AppColors.neutral600),
-                ),
+              return _InfoBanner(
+                icon: Icons.category_rounded,
+                message: 'No categories. Add categories in Admin.',
+                color: AppColors.neutral600,
               );
             }
-            // Use the category *from the current list* (same instance as an item) so DropdownButton finds exactly one match.
-            // After an admin update, _selectedCategory is a stale instance; matching by id gives us the list instance.
-            Category effectiveValue;
+
             Category? match;
-            if (_selectedCategory != null) {
-              for (final c in categories) {
-                if (c.id == _selectedCategory!.id) {
-                  match = c;
-                  break;
-                }
+            for (final c in categories) {
+              if (c.id == _selectedCategory?.id) {
+                match = c;
+                break;
               }
             }
-            if (match != null) {
-              effectiveValue = match;
-            } else {
-              effectiveValue = categories.first;
+            final effectiveValue = match ?? categories.first;
+            if (match == null) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) setState(() => _selectedCategory = categories.first);
               });
             }
+
             return DropdownButtonFormField<Category>(
               value: effectiveValue,
               isExpanded: true,
+              decoration: InputDecoration(
+                labelText: 'Category',
+                prefixIcon: const Icon(Icons.category_rounded, size: 20),
+                hintText: 'Basketball, Volleyball…',
+                border: _inputBorder(),
+                enabledBorder: _inputBorder(),
+                focusedBorder: _inputBorder(focused: true),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+              ),
               items: categories
-                  .map(
-                    (c) => DropdownMenuItem(
-                      value: c,
-                      child: Text(
-                        c.name,
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    ),
-                  )
+                  .map((c) => DropdownMenuItem(
+                value: c,
+                child: Text(c.name, overflow: TextOverflow.ellipsis),
+              ))
                   .toList(),
               onChanged: (v) => setState(() {
                 _selectedCategory = v;
@@ -145,497 +394,543 @@ class _PlayerReservationsScreenState
                 _endTime = null;
                 _error = null;
               }),
-              decoration: InputDecoration(
-                labelText: 'Category',
-                hintText: Responsive.isNarrow(context)
-                    ? 'e.g. Basketball, Volleyball'
-                    : 'Basketball, Volleyball, etc. — one slot per time for the court',
-              ),
             );
           },
-          loading: () => const LinearProgressIndicator(),
-          error: (e, st) => Text('Error loading categories: $e'),
+          loading: () => const _LoadingRow(label: 'Loading categories…'),
+          error: (e, _) => _InfoBanner(
+            icon: Icons.error_outline_rounded,
+            message: 'Error loading categories: $e',
+            color: AppColors.error,
+          ),
         ),
-        AppSpacing.gapMdV,
+        const SizedBox(height: _kSectionSpacing),
+
+        // ── Calendar ───────────────────────────────────────────────────────
         _buildCalendar(),
-        AppSpacing.gapMdV,
-        _buildAvailabilitySection(ref),
-        AppSpacing.gapMdV,
-        _buildTimePickers(context, ref),
-        AppSpacing.gapSmV,
+        const SizedBox(height: _kSectionSpacing),
+
+        // ── Availability grid ──────────────────────────────────────────────
+        _buildAvailabilitySection(),
+        const SizedBox(height: _kSectionSpacing),
+
+        // ── Time pickers ───────────────────────────────────────────────────
+        _buildTimePickers(),
+        const SizedBox(height: _kSectionSpacing),
+
+        // ── Event details ──────────────────────────────────────────────────
+        _SectionHeader(icon: Icons.info_outline_rounded, title: 'Event Details'),
+        const SizedBox(height: 12),
         TextField(
           controller: _eventCtrl,
-          decoration: const InputDecoration(labelText: 'Event type'),
+          textInputAction: TextInputAction.next,
+          decoration: InputDecoration(
+            labelText: 'Event type',
+            hintText: 'e.g. Friendly match, Tournament',
+            prefixIcon: const Icon(Icons.sports_rounded, size: 20),
+            border: _inputBorder(),
+            enabledBorder: _inputBorder(),
+            focusedBorder: _inputBorder(focused: true),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
         ),
+        const SizedBox(height: 12),
         TextField(
           controller: _playersCtrl,
-          decoration:
-              const InputDecoration(labelText: 'Number of players'),
           keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            labelText: 'Number of players',
+            prefixIcon: const Icon(Icons.group_rounded, size: 20),
+            border: _inputBorder(),
+            enabledBorder: _inputBorder(),
+            focusedBorder: _inputBorder(focused: true),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
         ),
-        if (_error != null)
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.sm),
-            child: Text(
-              _error!,
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.error,
+
+        // ── Error message ──────────────────────────────────────────────────
+        if (_error != null) ...[
+          const SizedBox(height: 10),
+          _ErrorBanner(message: _error!),
+        ],
+
+        const SizedBox(height: _kSectionSpacing),
+
+        // ── Submit button ──────────────────────────────────────────────────
+        SizedBox(
+          height: 52,
+          child: ElevatedButton.icon(
+            onPressed: _booking ? null : _confirmCreateReservation,
+            style: ElevatedButton.styleFrom(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
               ),
+              elevation: 0,
+            ),
+            icon: _booking
+                ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            )
+                : const Icon(Icons.add_circle_rounded, size: 22),
+            label: Text(
+              _booking ? 'Submitting…' : 'Create Reservation',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
             ),
           ),
-        AppSpacing.gapSmV,
-        ElevatedButton.icon(
-          onPressed: _booking ? null : _confirmCreateReservation,
-          icon: _booking
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.add),
-          label: const Text('Create reservation'),
         ),
+        const SizedBox(height: _kSectionSpacing),
       ],
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final reservationsAsync = ref.watch(myReservationsProvider);
-    final width = MediaQuery.sizeOf(context).width;
-    final useWideLayout = width >= _wideLayoutBreakpoint;
-
-    // Realtime subscription lives in myReservationsProvider; list updates when admin approves/rejects.
-
-    final profileAsync = ref.watch(currentUserProfileProvider);
-    final role = profileAsync.valueOrNull?['role']?.toString().toLowerCase();
-    final isAdmin = role == 'admin';
-
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      appBar: GradientAppBar(
-        title: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('My Reservations', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
-              if (isAdmin) ...[
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.25),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white, width: 1),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.admin_panel_settings, size: 16, color: Colors.white),
-                    const SizedBox(width: 4),
-                    Text('Admin', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ),
-        ),  // FittedBox
-        actions: [
-          if (isAdmin)
-            TextButton.icon(
-              onPressed: () => context.push('/admin'),
-              icon: const Icon(Icons.dashboard, size: 20, color: Colors.white),
-              label: const Text('Admin', style: TextStyle(color: Colors.white)),
-            ),
-          IconButton(
-            icon: const Icon(Icons.notifications, color: Colors.white),
-            onPressed: () => context.push('/notifications'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
-            tooltip: 'Logout',
-            onPressed: () async {
-              await ref.read(authRepositoryProvider).signOut();
-              if (mounted) context.go('/login');
-            },
-          ),
-          const AppBarThemeToggle(),
-        ],
-      ),
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: isDark
-              ? AppColors.surfaceGradientDark
-              : const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFFE0F2FE), Color(0xFFF0F9FF), Color(0xFFE0F2FE)],
-                ),
-        ),
-        child: useWideLayout
-          ? Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 280),
-                      child: _buildFormSection(ref),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: reservationsAsync.when(
-                    data: (res) => _buildReservationsSection(res, ref),
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
-                    error: (e, st) => Center(child: Text('Error: $e')),
-                  ),
-                ),
-              ],
-            )
-          : Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: _buildFormSection(ref),
-                  ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: reservationsAsync.when(
-                    data: (res) => _buildReservationsSection(res, ref),
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
-                    error: (e, st) => Center(child: Text('Error: $e')),
-                  ),
-                ),
-              ],
-            ),
+  OutlineInputBorder _inputBorder({bool focused = false}) {
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(
+        color: focused ? AppColors.blue600 : AppColors.neutral300,
+        width: focused ? 1.5 : 1,
       ),
     );
   }
 
-
-  Widget _buildAvailabilitySection(WidgetRef ref) {
-    final court = _singleCourt;
-    if (court == null) return const SizedBox.shrink();
-    final dateKey = _selectedDay.toIso8601String().substring(0, 10);
-    final occupiedAsync = ref.watch(occupiedSlotsProvider((courtId: court.id, date: dateKey)));
-    return occupiedAsync.when(
-      data: (occupied) {
-        const hours = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
-        return GlassCard(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Availability for ${DateFormat.MMMd().format(_selectedDay)}',
-                  style: AppTypography.titleSmall.copyWith(color: AppColors.blue800),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Wrap(
-                  spacing: AppSpacing.xs,
-                  runSpacing: AppSpacing.xs,
-                  children: hours.map((h) {
-                    final slotStart = '${h.toString().padLeft(2, '0')}:00';
-                    final slotEnd = h < 23 ? '${(h + 1).toString().padLeft(2, '0')}:00' : '23:00';
-                    final isBooked = slotOverlaps(slotStart, slotEnd, occupied);
-                    return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-                      decoration: BoxDecoration(
-                        color: isBooked ? AppColors.rejected.withOpacity(0.2) : AppColors.approved.withOpacity(0.2),
-                        borderRadius: AppRadius.radiusXs,
-                        border: Border.all(
-                          color: isBooked ? AppColors.rejected.withOpacity(0.5) : AppColors.approved.withOpacity(0.5),
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            isBooked ? Icons.block : Icons.check_circle,
-                            size: 14,
-                            color: isBooked ? AppColors.rejected : AppColors.approved,
-                          ),
-                          const SizedBox(width: AppSpacing.xs),
-                          Text('$slotStart', style: AppTypography.labelSmall),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-        );
-      },
-      loading: () => const GlassCard(padding: EdgeInsets.all(AppSpacing.md), child: Center(child: SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2)))),
-      error: (e, _) => GlassCard(padding: AppSpacing.paddingMd, child: Text('Could not load availability: $e', style: AppTypography.bodySmall)),
-    );
-  }
+  // ── Calendar widget ───────────────────────────────────────────────────────
 
   Widget _buildCalendar() {
-    final first = _today;
-    final last = _lastDay;
-    DateTime clampDay(DateTime d) {
-      if (d.isBefore(first)) return first;
-      if (d.isAfter(last)) return last;
+    DateTime clamp(DateTime d) {
+      if (d.isBefore(_today)) return _today;
+      if (d.isAfter(_lastDay)) return _lastDay;
       return DateTime(d.year, d.month, d.day);
     }
-    final focused = clampDay(_focusedDay);
-    final selected = clampDay(_selectedDay);
+
     return GlassCard(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.calendar_today, size: 18, color: AppColors.blue600),
-              const SizedBox(width: AppSpacing.xs),
-              Expanded(
-                child: Text(
-                  'Select date',
-                  style: AppTypography.titleSmall,
-                ),
+          // Header row
+          InkWell(
+            onTap: () => setState(() => _calendarExpanded = !_calendarExpanded),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_month_rounded,
+                      size: 20, color: AppColors.blue600),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _calendarExpanded
+                          ? 'Select date'
+                          : DateFormat('EEE, MMM d, y').format(_selectedDay),
+                      style: AppTypography.titleSmall.copyWith(
+                        color: AppColors.blue800,
+                      ),
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: _calendarExpanded ? 0 : 0.5,
+                    duration: const Duration(milliseconds: 200),
+                    child: const Icon(
+                      Icons.keyboard_arrow_up_rounded,
+                      color: AppColors.blue600,
+                    ),
+                  ),
+                ],
               ),
-              IconButton(
-                icon: Icon(
-                  _calendarExpanded ? Icons.expand_less : Icons.expand_more,
-                ),
-                tooltip: _calendarExpanded ? 'Hide calendar' : 'Show calendar',
-                onPressed: () {
-                  setState(() {
-                    _calendarExpanded = !_calendarExpanded;
-                  });
-                },
-              ),
-            ],
+            ),
           ),
+
+          // Calendar
           AnimatedCrossFade(
-            duration: const Duration(milliseconds: 200),
+            duration: const Duration(milliseconds: 250),
             crossFadeState: _calendarExpanded
                 ? CrossFadeState.showFirst
                 : CrossFadeState.showSecond,
             firstChild: TableCalendar(
-              firstDay: first,
-              lastDay: last,
-              focusedDay: focused,
+              firstDay: _today,
+              lastDay: _lastDay,
+              focusedDay: clamp(_focusedDay),
               calendarFormat: CalendarFormat.month,
               selectedDayPredicate: (day) =>
-                  day.year == selected.year &&
-                  day.month == selected.month &&
-                  day.day == selected.day,
-              enabledDayPredicate: (day) => !day.isBefore(first),
+              day.year == _selectedDay.year &&
+                  day.month == _selectedDay.month &&
+                  day.day == _selectedDay.day,
+              enabledDayPredicate: (day) => !day.isBefore(_today),
+              headerStyle: const HeaderStyle(
+                formatButtonVisible: false,
+                titleCentered: true,
+              ),
+              calendarStyle: CalendarStyle(
+                todayDecoration: BoxDecoration(
+                  color: AppColors.blue600.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                todayTextStyle:
+                const TextStyle(color: AppColors.blue600, fontWeight: FontWeight.w600),
+                selectedDecoration: const BoxDecoration(
+                  color: AppColors.blue600,
+                  shape: BoxShape.circle,
+                ),
+                selectedTextStyle: const TextStyle(color: Colors.white),
+              ),
               onDaySelected: (selectedDay, focusedDay) {
                 setState(() {
-                  _selectedDay = DateTime(
-                      selectedDay.year, selectedDay.month, selectedDay.day);
-                  _focusedDay = DateTime(
-                      focusedDay.year, focusedDay.month, focusedDay.day);
+                  _selectedDay = DateTime(selectedDay.year, selectedDay.month, selectedDay.day);
+                  _focusedDay = DateTime(focusedDay.year, focusedDay.month, focusedDay.day);
                   _startTime = null;
                   _endTime = null;
                   _error = null;
                 });
               },
             ),
-            secondChild: const SizedBox.shrink(),
+            secondChild: const SizedBox(height: 4),
           ),
         ],
       ),
     );
   }
 
-  /// Hours we allow for booking (whole-hour slots).
-  static const List<int> _bookingHours = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
+  // ── Availability grid ─────────────────────────────────────────────────────
 
-  Widget _buildTimePickers(BuildContext context, WidgetRef ref) {
+  Widget _buildAvailabilitySection() {
     final court = _singleCourt;
-    final dateKey = _selectedDay.toIso8601String().substring(0, 10);
-    final isPast = _selectedDay.isBefore(_today);
-    if (court == null || isPast) {
-      return Container(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        child: Text(
-          court == null ? 'Venue not loaded' : 'Select a date from the calendar',
-          style: AppTypography.bodySmall.copyWith(color: AppColors.neutral600),
-        ),
-      );
-    }
+    if (court == null) return const SizedBox.shrink();
 
-    final occupiedAsync = ref.watch(occupiedSlotsProvider((courtId: court.id, date: dateKey)));
+    final dateKey = _selectedDay.toIso8601String().substring(0, 10);
+    final occupiedAsync =
+    ref.watch(occupiedSlotsProvider((courtId: court.id, date: dateKey)));
+
     return occupiedAsync.when(
       data: (occupied) {
-        final availableStarts = <int>[];
-        for (final h in _bookingHours) {
-          final start = '${h.toString().padLeft(2, '0')}:00';
-          final end = h < 23 ? '${(h + 1).toString().padLeft(2, '0')}:00' : '23:00';
-          if (!slotOverlaps(start, end, occupied)) availableStarts.add(h);
-        }
+        const hours = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
+        final bookedCount = hours.where((h) {
+          final s = '${h.toString().padLeft(2, '0')}:00';
+          final e = h < 23 ? '${(h + 1).toString().padLeft(2, '0')}:00' : '23:00';
+          return slotOverlaps(s, e, occupied);
+        }).length;
+        final freeCount = hours.length - bookedCount;
 
-        final startHour = _startTime?.hour;
-        final availableEnds = <int>[];
-        if (startHour != null) {
-          final startStr = _formatTime(_startTime!);
-          for (var h = startHour + 1; h <= 23; h++) {
-            final endStr = '${h.toString().padLeft(2, '0')}:00';
-            if (!slotOverlaps(startStr, endStr, occupied)) availableEnds.add(h);
-          }
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (availableStarts.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: Text(
-                  'No available slots for this date. Pick another day.',
-                  style: AppTypography.bodySmall.copyWith(color: AppColors.rejected),
-                ),
-              )
-            else ...[
-              DropdownButtonFormField<int>(
-                value: startHour != null && availableStarts.contains(startHour) ? startHour : null,
-                decoration: const InputDecoration(
-                  labelText: 'Start time',
-                  hintText: 'Choose available start',
-                ),
-                items: availableStarts
-                    .map((h) => DropdownMenuItem(
-                          value: h,
-                          child: Text('${h.toString().padLeft(2, '0')}:00'),
-                        ))
-                    .toList(),
-                onChanged: (h) {
-                  if (h == null) return;
-                  final ends = availableEndsFor(occupied, h);
-                  setState(() {
-                    _startTime = TimeOfDay(hour: h, minute: 0);
-                    _endTime = ends.isNotEmpty ? TimeOfDay(hour: ends.first, minute: 0) : null;
-                    _error = null;
-                  });
-                },
+        return GlassCard(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.grid_view_rounded, size: 18, color: AppColors.blue600),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Availability · ${DateFormat.MMMd().format(_selectedDay)}',
+                      style: AppTypography.titleSmall.copyWith(color: AppColors.blue800),
+                    ),
+                  ),
+                  // Summary chips
+                  _MiniChip(label: '$freeCount free', isAvailable: true),
+                  const SizedBox(width: 6),
+                  _MiniChip(label: '$bookedCount booked', isAvailable: false),
+                ],
               ),
-              const SizedBox(height: AppSpacing.sm),
-              DropdownButtonFormField<int>(
-                value: startHour != null && _endTime != null && availableEndsFor(occupied, startHour).contains(_endTime!.hour) ? _endTime!.hour : null,
-                decoration: const InputDecoration(
-                  labelText: 'End time',
-                  hintText: 'Choose end time',
-                ),
-                items: startHour == null
-                    ? <DropdownMenuItem<int>>[]
-                    : availableEndsFor(occupied, startHour)
-                        .map((h) => DropdownMenuItem(
-                              value: h,
-                              child: Text('${h.toString().padLeft(2, '0')}:00'),
-                            ))
-                        .toList(),
-                onChanged: startHour == null ? null : (h) {
-                  if (h == null) return;
-                  setState(() {
-                    _endTime = TimeOfDay(hour: h, minute: 0);
-                    _error = null;
-                  });
-                },
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: hours.map((h) {
+                  final slotStart = '${h.toString().padLeft(2, '0')}:00';
+                  final slotEnd = h < 23
+                      ? '${(h + 1).toString().padLeft(2, '0')}:00'
+                      : '23:00';
+                  final isBooked = slotOverlaps(slotStart, slotEnd, occupied);
+                  final isSelected = _startTime?.hour == h;
+
+                  return GestureDetector(
+                    onTap: isBooked
+                        ? null
+                        : () {
+                      final ends = availableEndsFor(occupied, h);
+                      setState(() {
+                        _startTime = TimeOfDay(hour: h, minute: 0);
+                        _endTime = ends.isNotEmpty
+                            ? TimeOfDay(hour: ends.first, minute: 0)
+                            : null;
+                        _error = null;
+                      });
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.blue600
+                            : isBooked
+                            ? AppColors.rejected.withOpacity(0.12)
+                            : AppColors.approved.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isSelected
+                              ? AppColors.blue600
+                              : isBooked
+                              ? AppColors.rejected.withOpacity(0.4)
+                              : AppColors.approved.withOpacity(0.4),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        slotStart,
+                        style: AppTypography.labelSmall.copyWith(
+                          color: isSelected
+                              ? Colors.white
+                              : isBooked
+                              ? AppColors.rejected
+                              : AppColors.approved,
+                          fontWeight:
+                          isSelected ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 8),
+              // Legend
+              Row(
+                children: [
+                  _LegendDot(color: AppColors.approved),
+                  const SizedBox(width: 4),
+                  Text('Available  ', style: AppTypography.bodySmall.copyWith(color: AppColors.neutral600, fontSize: 11)),
+                  _LegendDot(color: AppColors.rejected),
+                  const SizedBox(width: 4),
+                  Text('Booked  ', style: AppTypography.bodySmall.copyWith(color: AppColors.neutral600, fontSize: 11)),
+                  _LegendDot(color: AppColors.blue600),
+                  const SizedBox(width: 4),
+                  Text('Selected', style: AppTypography.bodySmall.copyWith(color: AppColors.neutral600, fontSize: 11)),
+                ],
               ),
             ],
-          ],
+          ),
         );
       },
-      loading: () => const Padding(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-        child: Center(child: SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))),
+      loading: () => const GlassCard(
+        padding: EdgeInsets.all(16),
+        child: Center(
+          child: SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
       ),
-      error: (e, _) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        child: Text('Could not load slots: $e', style: AppTypography.bodySmall.copyWith(color: AppColors.error)),
+      error: (e, _) => _InfoBanner(
+        icon: Icons.error_outline_rounded,
+        message: 'Could not load availability: $e',
+        color: AppColors.error,
       ),
     );
   }
 
-  List<int> availableEndsFor(List<({String start, String end})> occupied, int startHour) {
-    final startStr = '${startHour.toString().padLeft(2, '0')}:00';
-    final ends = <int>[];
-    for (var h = startHour + 1; h <= 23; h++) {
-      final endStr = '${h.toString().padLeft(2, '0')}:00';
-      if (!slotOverlaps(startStr, endStr, occupied)) ends.add(h);
+  // ── Time pickers ──────────────────────────────────────────────────────────
+
+  Widget _buildTimePickers() {
+    final court = _singleCourt;
+    final isPast = _selectedDay.isBefore(_today);
+
+    if (court == null || isPast) {
+      return _InfoBanner(
+        icon: isPast ? Icons.history_rounded : Icons.storefront_rounded,
+        message: court == null
+            ? 'Venue not loaded yet.'
+            : 'Past date selected. Please pick a future date.',
+        color: AppColors.neutral600,
+      );
     }
-    return ends;
+
+    final dateKey = _selectedDay.toIso8601String().substring(0, 10);
+    final occupiedAsync =
+    ref.watch(occupiedSlotsProvider((courtId: court.id, date: dateKey)));
+
+    return occupiedAsync.when(
+      data: (occupied) {
+        final availableStarts = [
+          for (final h in _bookingHours)
+            if (!slotOverlaps(
+              '${h.toString().padLeft(2, '0')}:00',
+              '${(h + 1).toString().padLeft(2, '0')}:00',
+              occupied,
+            ))
+              h
+        ];
+
+        if (availableStarts.isEmpty) {
+          return _InfoBanner(
+            icon: Icons.event_busy_rounded,
+            message: 'No slots available on this date. Try another day.',
+            color: AppColors.rejected,
+          );
+        }
+
+        final startHour = _startTime?.hour;
+        final validStart =
+            startHour != null && availableStarts.contains(startHour);
+        final ends =
+        validStart ? availableEndsFor(occupied, startHour!) : <int>[];
+        final validEnd = _endTime != null &&
+            validStart &&
+            ends.contains(_endTime!.hour);
+
+        return GlassCard(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.schedule_rounded, size: 18, color: AppColors.blue600),
+                  const SizedBox(width: 8),
+                  Text('Select Time', style: AppTypography.titleSmall.copyWith(color: AppColors.blue800)),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      value: validStart ? startHour : null,
+                      decoration: InputDecoration(
+                        labelText: 'Start',
+                        prefixIcon: const Icon(Icons.play_arrow_rounded, size: 18),
+                        border: _inputBorder(),
+                        enabledBorder: _inputBorder(),
+                        focusedBorder: _inputBorder(focused: true),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                      ),
+                      items: availableStarts
+                          .map((h) => DropdownMenuItem(
+                        value: h,
+                        child: Text('${h.toString().padLeft(2, '0')}:00'),
+                      ))
+                          .toList(),
+                      onChanged: (h) {
+                        if (h == null) return;
+                        final e = availableEndsFor(occupied, h);
+                        setState(() {
+                          _startTime = TimeOfDay(hour: h, minute: 0);
+                          _endTime = e.isNotEmpty
+                              ? TimeOfDay(hour: e.first, minute: 0)
+                              : null;
+                          _error = null;
+                        });
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Icon(Icons.arrow_forward_rounded,
+                        size: 18, color: AppColors.neutral400),
+                  ),
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      value: validEnd ? _endTime!.hour : null,
+                      decoration: InputDecoration(
+                        labelText: 'End',
+                        prefixIcon: const Icon(Icons.stop_rounded, size: 18),
+                        border: _inputBorder(),
+                        enabledBorder: _inputBorder(),
+                        focusedBorder: _inputBorder(focused: true),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                      ),
+                      items: ends
+                          .map((h) => DropdownMenuItem(
+                        value: h,
+                        child: Text('${h.toString().padLeft(2, '0')}:00'),
+                      ))
+                          .toList(),
+                      onChanged: startHour == null
+                          ? null
+                          : (h) {
+                        if (h == null) return;
+                        setState(() {
+                          _endTime = TimeOfDay(hour: h, minute: 0);
+                          _error = null;
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              // Duration pill
+              if (validStart && validEnd) ...[
+                const SizedBox(height: 10),
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.blue600.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${_endTime!.hour - _startTime!.hour} hour(s) booked',
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.blue600,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Center(child: SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))),
+      ),
+      error: (e, _) => _InfoBanner(
+        icon: Icons.error_outline_rounded,
+        message: 'Could not load slots: $e',
+        color: AppColors.error,
+      ),
+    );
   }
 
-  static const List<String> _statusFilterOptions = [
-    'ALL',
-    'PENDING',
-    'APPROVED',
-    'REJECTED',
-    'CANCELLED',
-    'ADMIN',
-  ];
+  // ─────────────────────────────────────────────────────────────────────────
+  // Reservations Section
+  // ─────────────────────────────────────────────────────────────────────────
 
-  Widget _buildReservationsSection(List<Reservation> list, WidgetRef ref) {
-    final filtered = _reservationStatusFilter == null ||
-            _reservationStatusFilter == 'ALL'
+  Widget _buildReservationsSection(List<Reservation> list) {
+    final filtered = (_reservationStatusFilter == null ||
+        _reservationStatusFilter == 'ALL')
         ? list
         : list.where((r) => r.status == _reservationStatusFilter).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // ── Header ─────────────────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md,
-            AppSpacing.sm,
-            AppSpacing.md,
-            AppSpacing.xs,
-          ),
-          child: Text(
-            'Your reservations',
-            style: AppTypography.titleLarge.copyWith(
-              color: AppColors.blue800,
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              _kHorizontalPadding, _kSectionSpacing, _kHorizontalPadding, 0),
           child: Row(
             children: [
+              const Icon(Icons.event_note_rounded, size: 20, color: AppColors.blue600),
+              const SizedBox(width: 8),
               Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: _statusFilterOptions.map((status) {
-                      final isSelected = (_reservationStatusFilter == null && status == 'ALL') ||
-                          _reservationStatusFilter == status;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: AppSpacing.xs),
-                        child: FilterChip(
-                          label: Text(
-                            status == 'ALL' ? 'All' : status.toLowerCase(),
-                            style: AppTypography.labelSmall,
-                          ),
-                          selected: isSelected,
-                          onSelected: (_) {
-                            setState(() {
-                              _reservationStatusFilter = status == 'ALL' ? null : status;
-                            });
-                          },
-                        ),
-                      );
-                    }).toList(),
-                  ),
+                child: Text(
+                  'Your Reservations',
+                  style: AppTypography.titleLarge.copyWith(color: AppColors.blue800),
                 ),
               ),
+              Text(
+                '${filtered.length}',
+                style: AppTypography.titleMedium.copyWith(color: AppColors.blue600),
+              ),
               IconButton(
-                icon: const Icon(Icons.refresh),
-                tooltip: 'Refresh list',
+                icon: const Icon(Icons.refresh_rounded, size: 20),
+                tooltip: 'Refresh',
                 onPressed: () {
                   ref.invalidate(myReservationsProvider);
                   ref.invalidate(occupiedSlotsProvider);
@@ -644,261 +939,139 @@ class _PlayerReservationsScreenState
             ],
           ),
         ),
-        const SizedBox(height: AppSpacing.sm),
+        const SizedBox(height: 10),
+
+        // ── Status filter chips ────────────────────────────────────────────
+        SizedBox(
+          height: _kChipHeight + 8,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: _kHorizontalPadding),
+            itemCount: _statusOptions.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 6),
+            itemBuilder: (_, i) {
+              final status = _statusOptions[i];
+              final isSelected = (_reservationStatusFilter == null && status == 'ALL') ||
+                  _reservationStatusFilter == status;
+              return ChoiceChip(
+                label: Text(
+                  status == 'ALL' ? 'All' : _capitalize(status),
+                  style: AppTypography.labelSmall.copyWith(
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+                selected: isSelected,
+                onSelected: (_) => setState(() {
+                  _reservationStatusFilter = status == 'ALL' ? null : status;
+                }),
+                visualDensity: VisualDensity.compact,
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        // ── List ───────────────────────────────────────────────────────────
         Expanded(
           child: filtered.isEmpty
               ? (list.isEmpty
-                  ? _buildEmptyReservations()
-                  : _buildEmptyFilteredMessage())
-              : _buildReservationsList(filtered, ref),
+              ? const EmptyState(
+            icon: Icons.event_available_rounded,
+            title: 'No reservations yet',
+            subtitle:
+            'Select a category, date & time, then tap "Create Reservation".',
+          )
+              : const EmptyState(
+            icon: Icons.filter_list_rounded,
+            title: 'No matches',
+            subtitle: 'Try a different filter.',
+          ))
+              : _buildReservationsList(filtered),
         ),
       ],
     );
   }
 
-  Widget _buildEmptyReservations() {
-    return const EmptyState(
-      icon: Icons.event_available_rounded,
-      title: 'No reservations yet',
-      subtitle: 'Select a category, date & time above, then tap "Create reservation".',
-    );
-  }
+  String _capitalize(String s) =>
+      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1).toLowerCase();
 
-  Widget _buildEmptyFilteredMessage() {
-    return EmptyState(
-      icon: Icons.filter_list_rounded,
-      title: 'No reservations for this status',
-      subtitle: 'Try another filter or create a new reservation.',
-    );
-  }
-
-  Widget _buildReservationsList(List<Reservation> list, WidgetRef ref) {
-    final dateFmt = DateFormat.yMMMd();
+  Widget _buildReservationsList(List<Reservation> list) {
     final pendingAsync = ref.watch(myPendingChangeRequestsProvider);
     return pendingAsync.when(
-      data: (pendingRequests) {
-        return ListView.builder(
-          padding: AppSpacing.paddingMd,
-          itemCount: list.length,
-          itemBuilder: (context, index) {
-            final r = list[index];
-            final matching = pendingRequests.where((req) => req.reservationId == r.id).toList();
-            final request = matching.isNotEmpty ? matching.first : null;
-            final hasChangeRequest = request != null;
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (hasChangeRequest)
-                  _ChangeRequestBanner(
-                    reservation: r,
-                    request: request,
-                  ),
-                GlassCard(
-                  margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: ListTile(
-                    title: Text(
-                      '${dateFmt.format(r.date)} ${r.startTime} - ${r.endTime}',
-                      style: AppTypography.titleMedium,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${r.eventType} • Players: ${r.playersCount}',
-                          style: AppTypography.bodySmall,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.sm,
-                            vertical: AppSpacing.xs,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.statusColor(r.status).withOpacity(0.15),
-                            borderRadius: AppRadius.radiusXs,
-                          ),
-                          child: Text(
-                            r.status,
-                            style: AppTypography.labelSmall.copyWith(
-                              color: AppColors.statusColor(r.status),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    trailing: Wrap(
-                      spacing: AppSpacing.xs,
-                      runSpacing: AppSpacing.xs,
-                      children: [
-                        if (r.status == 'PENDING' || r.status == 'APPROVED')
-                          IconButton(
-                            icon: Icon(r.status == 'APPROVED' ? Icons.schedule : Icons.edit),
-                            tooltip: r.status == 'APPROVED' ? 'Reschedule' : 'Edit',
-                            color: Theme.of(context).brightness == Brightness.dark ? AppColors.cyan400 : AppColors.blue600,
-                            onPressed: () => _editReservationDialog(r),
-                          ),
-                        if (r.status == 'PENDING')
-                          IconButton(
-                            icon: const Icon(Icons.cancel),
-                            color: AppColors.orange600,
-                            onPressed: () => _confirmCancelReservation(r),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-      loading: () => ListView.builder(
-        padding: AppSpacing.paddingMd,
+      data: (pendingRequests) => ListView.builder(
+        padding: const EdgeInsets.fromLTRB(
+            _kHorizontalPadding, 4, _kHorizontalPadding, 24),
         itemCount: list.length,
-        itemBuilder: (context, index) {
+        itemBuilder: (_, index) {
           final r = list[index];
-          final dateFmt = DateFormat.yMMMd();
-          return GlassCard(
-            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: ListTile(
-              title: Text('${dateFmt.format(r.date)} ${r.startTime} - ${r.endTime}', style: AppTypography.titleMedium),
-              subtitle: Text('${r.eventType} • ${r.status}', style: AppTypography.bodySmall),
-            ),
+          final request = pendingRequests
+              .where((req) => req.reservationId == r.id)
+              .firstOrNull;
+          return _ReservationCard(
+            reservation: r,
+            changeRequest: request,
+            onEdit: () => _editReservationDialog(r),
+            onCancel: () => _confirmCancelReservation(r),
           );
         },
       ),
-      error: (_, __) => ListView.builder(
-        padding: AppSpacing.paddingMd,
-        itemCount: list.length,
-        itemBuilder: (context, index) {
-          final r = list[index];
-          final dateFmt = DateFormat.yMMMd();
-          return GlassCard(
-            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: ListTile(
-              title: Text('${dateFmt.format(r.date)} ${r.startTime} - ${r.endTime}', style: AppTypography.titleMedium),
-              subtitle: Text('${r.eventType} • ${r.status}', style: AppTypography.bodySmall),
-            ),
-          );
-        },
-      ),
+      loading: () => _buildSimpleList(list),
+      error: (_, __) => _buildSimpleList(list),
     );
   }
 
-  Future<void> _createReservation() async {
+  Widget _buildSimpleList(List<Reservation> list) {
+    final dateFmt = DateFormat.yMMMd();
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(
+          _kHorizontalPadding, 4, _kHorizontalPadding, 24),
+      itemCount: list.length,
+      itemBuilder: (_, i) {
+        final r = list[i];
+        return GlassCard(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(14),
+          child: Text(
+            '${dateFmt.format(r.date)} · ${r.startTime}–${r.endTime}',
+            style: AppTypography.bodySmall,
+          ),
+        );
+      },
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Actions
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<void> _confirmCreateReservation() async {
     final court = _singleCourt;
     final category = _selectedCategory;
     if (court == null ||
         category == null ||
         _startTime == null ||
         _endTime == null ||
-        _eventCtrl.text.isEmpty) {
-      setState(() => _error = 'Please fill category, date, time and event type.');
+        _eventCtrl.text.trim().isEmpty) {
+      setState(() =>
+      _error = 'Please fill in category, date, time, and event type.');
       return;
     }
-    final startStr = _formatTime(_startTime!);
-    final endStr = _formatTime(_endTime!);
-    if (startStr.compareTo(endStr) >= 0) {
-      setState(() => _error = 'End time must be after start time.');
-      return;
-    }
+
     final dateKey = _selectedDay.toIso8601String().substring(0, 10);
-    final occupied = await ref.read(occupiedSlotsProvider((courtId: court.id, date: dateKey)).future);
-    if (slotOverlaps(startStr, endStr, occupied)) {
-      setState(() => _error = 'This slot was taken. Please choose another time.');
-      return;
-    }
-    setState(() {
-      _booking = true;
-      _error = null;
-    });
-
-    final service = ref.read(reservationServiceProvider);
-    final players = int.tryParse(_playersCtrl.text.trim()) ?? 1;
-
-    try {
-      final profile = await ref.read(currentUserProfileProvider.future);
-      final createAsAdmin = profile?['role']?.toString().trim().toLowerCase() == 'admin';
-      await service.createReservation(
-        courtId: court.id,
-        categoryId: category.id,
-        date: _selectedDay,
-        startTime: startStr,
-        endTime: endStr,
-        eventType: _eventCtrl.text.trim(),
-        playersCount: players,
-        createAsAdmin: createAsAdmin,
-      );
-      ref.invalidate(myReservationsProvider);
-      ref.invalidate(occupiedSlotsProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Reservation submitted. It is pending approval.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      final msg = e.toString().toLowerCase();
-      if (msg.contains('already') ||
-          msg.contains('booked') ||
-          msg.contains('overlap') ||
-          msg.contains('409')) {
-        setState(() => _error = 'This time slot is already booked. Choose another.');
-      } else {
-        setState(() => _error = e.toString());
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _booking = false);
-      }
-    }
-  }
-
-  String _formatTime(TimeOfDay t) {
-    final h = t.hour.toString().padLeft(2, '0');
-    final m = t.minute.toString().padLeft(2, '0');
-    return '$h:$m';
-  }
-
-  bool _validateSlotWithOccupied(List<({String start, String end})> occupied) {
-    if (_startTime == null || _endTime == null) return false;
-    final startStr = _formatTime(_startTime!);
-    final endStr = _formatTime(_endTime!);
-    if (startStr.compareTo(endStr) >= 0) return false;
-    return !slotOverlaps(startStr, endStr, occupied);
-  }
-
-  Future<void> _confirmCreateReservation() async {
-    final court = _singleCourt;
-    final category = _selectedCategory;
-    if (court == null || category == null || _startTime == null || _endTime == null || _eventCtrl.text.isEmpty) {
-      setState(() => _error = 'Please fill category, date, start time, end time and event type.');
-      return;
-    }
-    final dateKey = _selectedDay.toIso8601String().substring(0, 10);
-    final occupied = await ref.read(occupiedSlotsProvider((courtId: court.id, date: dateKey)).future);
+    final occupied = await ref
+        .read(occupiedSlotsProvider((courtId: court.id, date: dateKey)).future);
     if (!_validateSlotWithOccupied(occupied)) {
-      setState(() => _error = 'This slot is no longer available. Please pick another time.');
+      setState(() =>
+      _error = 'This slot is no longer available. Please pick another time.');
       return;
     }
+
     final confirmed = await ConfirmDialog.show(
       context,
       title: 'Submit reservation?',
-      message: 'Your request will be sent for approval. You\'ll be notified when it\'s confirmed.',
-      confirmLabel: 'Yes, submit',
+      message:
+      'Your request will be sent for approval. Youll be notified once confirmed.',
+    confirmLabel: 'Yes, submit',
       cancelLabel: 'Cancel',
       icon: Icons.event_available_rounded,
     );
@@ -906,23 +1079,67 @@ class _PlayerReservationsScreenState
     await _createReservation();
   }
 
+  Future<void> _createReservation() async {
+    final court = _singleCourt;
+    final category = _selectedCategory;
+    final startStr = _formatTime(_startTime!);
+    final endStr = _formatTime(_endTime!);
+
+    setState(() {
+      _booking = true;
+      _error = null;
+    });
+
+    try {
+      final profile = await ref.read(currentUserProfileProvider.future);
+      final createAsAdmin =
+          profile?['role']?.toString().trim().toLowerCase() == 'admin';
+      await ref.read(reservationServiceProvider).createReservation(
+        courtId: court!.id,
+        categoryId: category!.id,
+        date: _selectedDay,
+        startTime: startStr,
+        endTime: endStr,
+        eventType: _eventCtrl.text.trim(),
+        playersCount: int.tryParse(_playersCtrl.text.trim()) ?? 1,
+        createAsAdmin: createAsAdmin,
+      );
+      ref.invalidate(myReservationsProvider);
+      ref.invalidate(occupiedSlotsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Reservation submitted — pending approval.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // Switch to reservations tab on narrow layout
+        if (_tabController.index == 0) _tabController.animateTo(1);
+      }
+    } catch (e) {
+      final msg = e.toString().toLowerCase();
+      setState(() => _error = (msg.contains('already') ||
+          msg.contains('booked') ||
+          msg.contains('overlap'))
+          ? 'This time slot is already booked. Choose another.'
+          : e.toString());
+    } finally {
+      if (mounted) setState(() => _booking = false);
+    }
+  }
+
   Future<void> _confirmCancelReservation(Reservation r) async {
     final confirmed = await ConfirmDialog.show(
       context,
-      title: 'Cancel this reservation?',
-      message: 'This reservation will be cancelled. The slot may become available for others.',
+      title: 'Cancel reservation?',
+      message: 'This reservation will be cancelled.',
       confirmLabel: 'Yes, cancel',
       cancelLabel: 'Keep it',
       isDanger: true,
       icon: Icons.cancel_outlined,
     );
     if (!confirmed || !mounted) return;
-    await _cancelReservation(r);
-  }
-
-  Future<void> _cancelReservation(Reservation r) async {
-    final repo = ref.read(reservationsRepositoryProvider);
-    await repo.cancelReservation(r.id);
+    await ref.read(reservationsRepositoryProvider).cancelReservation(r.id);
     ref.invalidate(myReservationsProvider);
     ref.invalidate(occupiedSlotsProvider);
   }
@@ -943,80 +1160,99 @@ class _PlayerReservationsScreenState
     final isReschedule = r.status == 'APPROVED';
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(isReschedule ? 'Reschedule reservation' : 'Edit reservation'),
+      builder: (ctx) => AlertDialog(
+        title: Text(isReschedule ? 'Reschedule' : 'Edit Reservation'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextButton(
-                onPressed: () async {
+              // Date picker row
+              _EditRow(
+                icon: Icons.calendar_today_rounded,
+                label: DateFormat.yMMMd().format(selectedDate),
+                onTap: () async {
                   final d = await showDatePicker(
-                    context: context,
+                    context: ctx,
                     initialDate: selectedDate,
-                    firstDate:
-                        DateTime.now().subtract(const Duration(days: 365)),
+                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
                     lastDate: DateTime.now().add(const Duration(days: 365)),
                   );
-                  if (d != null) {
-                    selectedDate = d;
-                  }
+                  if (d != null) selectedDate = d;
                 },
-                child: Text(DateFormat.yMMMd().format(selectedDate)),
               ),
-              TextButton(
-                onPressed: () async {
-                  final t = await showTimePicker(
-                    context: context,
-                    initialTime: start,
-                  );
-                  if (t != null) start = t;
-                },
-                child: Text('Start: ${start.format(context)}'),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _EditRow(
+                      icon: Icons.play_arrow_rounded,
+                      label: start.format(ctx),
+                      onTap: () async {
+                        final t = await showTimePicker(context: ctx, initialTime: start);
+                        if (t != null) start = t;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _EditRow(
+                      icon: Icons.stop_rounded,
+                      label: end.format(ctx),
+                      onTap: () async {
+                        final t = await showTimePicker(context: ctx, initialTime: end);
+                        if (t != null) end = t;
+                      },
+                    ),
+                  ),
+                ],
               ),
-              TextButton(
-                onPressed: () async {
-                  final t = await showTimePicker(
-                    context: context,
-                    initialTime: end,
-                  );
-                  if (t != null) end = t;
-                },
-                child: Text('End: ${end.format(context)}'),
-              ),
+              const SizedBox(height: 12),
               TextField(
                 controller: eventCtrl,
-                decoration: const InputDecoration(labelText: 'Event type'),
+                decoration: const InputDecoration(
+                  labelText: 'Event type',
+                  prefixIcon: Icon(Icons.sports_rounded, size: 18),
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
               ),
+              const SizedBox(height: 10),
               TextField(
                 controller: playersCtrl,
-                decoration:
-                    const InputDecoration(labelText: 'Players count'),
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Players count',
+                  prefixIcon: Icon(Icons.group_rounded, size: 18),
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
               ),
+              const SizedBox(height: 16),
             ],
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () async {
               final confirmed = await ConfirmDialog.show(
-                context,
+                ctx,
                 title: isReschedule ? 'Submit reschedule?' : 'Save changes?',
                 message: isReschedule
-                    ? 'Your reschedule will need admin approval again. Date, time and details will be updated.'
-                    : 'Reservation date, time and details will be updated.',
+                    ? 'Your reschedule will need admin approval again.'
+                    : 'Reservation details will be updated.',
                 confirmLabel: isReschedule ? 'Yes, submit' : 'Yes, save',
                 cancelLabel: 'Cancel',
                 icon: Icons.save_outlined,
               );
-              if (!confirmed || !context.mounted) return;
-              final service = ref.read(reservationServiceProvider);
+              if (!confirmed || !ctx.mounted) return;
               try {
-                await service.updateReservation(
+                await ref.read(reservationServiceProvider).updateReservation(
                   id: r.id,
                   courtId: r.courtId,
                   date: selectedDate,
@@ -1024,15 +1260,15 @@ class _PlayerReservationsScreenState
                   endTime: _formatTime(end),
                   eventType: eventCtrl.text.trim(),
                   playersCount:
-                      int.tryParse(playersCtrl.text.trim()) ?? r.playersCount,
+                  int.tryParse(playersCtrl.text.trim()) ?? r.playersCount,
                   currentStatus: r.status,
                 );
-                if (context.mounted) {
-                  Navigator.pop(context);
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(isReschedule
-                          ? 'Reschedule submitted. Pending admin approval.'
+                          ? 'Reschedule submitted — pending approval.'
                           : 'Reservation updated.'),
                       backgroundColor: Colors.green,
                     ),
@@ -1041,16 +1277,15 @@ class _PlayerReservationsScreenState
                 ref.invalidate(myReservationsProvider);
                 ref.invalidate(occupiedSlotsProvider);
               } catch (e) {
-                if (context.mounted) {
+                if (ctx.mounted) {
                   final msg = e.toString().toLowerCase();
-                  final isSlot = msg.contains('already') ||
-                      msg.contains('booked') ||
-                      msg.contains('overlap');
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(isSlot
-                          ? 'That time slot is already booked. Choose another.'
-                          : e.toString()),
+                      content: Text(
+                        (msg.contains('already') || msg.contains('booked'))
+                            ? 'That time slot is already booked. Choose another.'
+                            : e.toString(),
+                      ),
                       backgroundColor: Colors.red,
                     ),
                   );
@@ -1065,6 +1300,416 @@ class _PlayerReservationsScreenState
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Sub-widgets
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AdminBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.25),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.7)),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.admin_panel_settings_rounded, size: 13, color: Colors.white),
+          SizedBox(width: 4),
+          Text('Admin', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.icon, required this.title});
+  final IconData icon;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppColors.blue600),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: AppTypography.titleSmall.copyWith(
+            color: AppColors.blue800,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InfoBanner extends StatelessWidget {
+  const _InfoBanner({required this.icon, required this.message, required this.color});
+  final IconData icon;
+  final String message;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(message, style: AppTypography.bodySmall.copyWith(color: color)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.error.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.error.withOpacity(0.3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.error_outline_rounded, size: 16, color: AppColors.error),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTypography.bodySmall.copyWith(color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoadingRow extends StatelessWidget {
+  const _LoadingRow({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 10),
+          Text(label, style: AppTypography.bodySmall.copyWith(color: AppColors.neutral600)),
+        ],
+      ),
+    );
+  }
+}
+
+class _VenuePill extends StatelessWidget {
+  const _VenuePill({required this.name});
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.blue600.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.blue600.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.stadium_rounded, size: 14, color: AppColors.blue600),
+          const SizedBox(width: 6),
+          Text(
+            name,
+            style: AppTypography.labelSmall.copyWith(
+              color: AppColors.blue600,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniChip extends StatelessWidget {
+  const _MiniChip({required this.label, required this.isAvailable});
+  final String label;
+  final bool isAvailable;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isAvailable ? AppColors.approved : AppColors.rejected;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({required this.color});
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 8,
+      height: 8,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+}
+
+class _EditRow extends StatelessWidget {
+  const _EditRow({required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.neutral300),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: AppColors.blue600),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                label,
+                style: AppTypography.bodySmall.copyWith(color: AppColors.blue800),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reservation Card
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ReservationCard extends StatelessWidget {
+  const _ReservationCard({
+    required this.reservation,
+    required this.changeRequest,
+    required this.onEdit,
+    required this.onCancel,
+  });
+
+  final Reservation reservation;
+  final ReservationChangeRequest? changeRequest;
+  final VoidCallback onEdit;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = reservation;
+    final dateFmt = DateFormat.yMMMd();
+    final statusColor = AppColors.statusColor(r.status);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (changeRequest != null)
+            _ChangeRequestBanner(reservation: r, request: changeRequest!),
+          GlassCard(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Date & time row ─────────────────────────────────────────
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Date block
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.blue600.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            DateFormat('MMM').format(r.date).toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.blue600,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          Text(
+                            DateFormat('d').format(r.date),
+                            style: TextStyle(
+                              fontSize: 20,
+                              color: AppColors.blue800,
+                              fontWeight: FontWeight.w800,
+                              height: 1.1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${r.startTime} – ${r.endTime}',
+                            style: AppTypography.titleMedium,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${r.eventType}  ·  ${r.playersCount} players',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.neutral600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 6),
+                          // Status badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: statusColor.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              r.status,
+                              style: AppTypography.labelSmall.copyWith(
+                                color: statusColor,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Action buttons — only for PENDING
+                    if (r.status == 'PENDING')
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _ActionIconButton(
+                            icon: Icons.edit_rounded,
+                            color: AppColors.blue600,
+                            tooltip: 'Edit',
+                            onTap: onEdit,
+                          ),
+                          const SizedBox(width: 4),
+                          _ActionIconButton(
+                            icon: Icons.cancel_rounded,
+                            color: AppColors.orange600,
+                            tooltip: 'Cancel',
+                            onTap: onCancel,
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionIconButton extends StatelessWidget {
+  const _ActionIconButton({
+    required this.icon,
+    required this.color,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 18, color: color),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Change Request Banner
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _ChangeRequestBanner extends ConsumerWidget {
   const _ChangeRequestBanner({
     required this.reservation,
@@ -1076,62 +1721,98 @@ class _ChangeRequestBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final expired = request.isExpired || request.expiresAt.isBefore(DateTime.now());
+    final expired =
+        request.isExpired || request.expiresAt.isBefore(DateTime.now());
+
     return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      ),
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
-        color: AppColors.blue600.withOpacity(0.12),
-        borderRadius: AppRadius.radiusXs,
-        border: Border.all(color: AppColors.blue600.withOpacity(0.4)),
+        color: AppColors.blue600.withOpacity(0.08),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(_kCardRadius)),
+        border: Border.all(color: AppColors.blue600.withOpacity(0.3)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Reservation Change Requested',
-            style: AppTypography.labelMedium.copyWith(
-              color: AppColors.blue800,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Admin proposed a new schedule: ${request.newStartTime} – ${request.newEndTime}',
-            style: AppTypography.bodySmall.copyWith(color: AppColors.neutral700),
-          ),
-          const SizedBox(height: AppSpacing.xs),
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              TextButton(
-                onPressed: expired
-                    ? null
-                    : () => ReservationChangeModal.show(
-                          context,
-                          request: request,
-                          reservationDate: reservation.date,
-                          onAccept: () => _accept(ref, context),
-                          onReject: () => _reject(ref, context),
-                        ),
-                child: const Text('View details'),
-              ),
-              if (!expired) ...[
-                TextButton(
-                  onPressed: () => _reject(ref, context),
-                  child: const Text('Reject', style: TextStyle(color: AppColors.rejected)),
+              Icon(Icons.swap_horiz_rounded, size: 16, color: AppColors.blue600),
+              const SizedBox(width: 6),
+              Text(
+                'Reschedule Proposed',
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.blue800,
+                  fontWeight: FontWeight.w700,
                 ),
-                ElevatedButton(
-                  onPressed: () => _accept(ref, context),
-                  child: const Text('Accept'),
+              ),
+              if (expired) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.neutral300,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'Expired',
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.neutral600,
+                      fontSize: 10,
+                    ),
+                  ),
                 ),
               ],
             ],
           ),
+          const SizedBox(height: 4),
+          Text(
+            'New time: ${request.newStartTime} – ${request.newEndTime}',
+            style: AppTypography.bodySmall.copyWith(color: AppColors.neutral700),
+          ),
+          if (!expired) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton.icon(
+                  onPressed: () => ReservationChangeModal.show(
+                    context,
+                    request: request,
+                    reservationDate: reservation.date,
+                    onAccept: () => _accept(ref, context),
+                    onReject: () => _reject(ref, context),
+                  ),
+                  icon: const Icon(Icons.info_outline_rounded, size: 14),
+                  label: const Text('Details'),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                OutlinedButton(
+                  onPressed: () => _reject(ref, context),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.rejected,
+                    side: BorderSide(color: AppColors.rejected.withOpacity(0.5)),
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                  child: const Text('Reject'),
+                ),
+                const SizedBox(width: 6),
+                ElevatedButton(
+                  onPressed: () => _accept(ref, context),
+                  style: ElevatedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                  child: const Text('Accept'),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -1142,12 +1823,13 @@ class _ChangeRequestBanner extends ConsumerWidget {
     if (uid == null) return;
     try {
       await ref.read(reservationChangeServiceProvider).acceptChangeRequest(
-            changeRequestId: request.id,
-            userId: uid,
-            notificationId: null,
-          );
+        changeRequestId: request.id,
+        userId: uid,
+        notificationId: null,
+      );
       ref.invalidate(myReservationsProvider);
       ref.invalidate(myPendingChangeRequestsProvider);
+      ref.invalidate(occupiedSlotsProvider);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1158,7 +1840,9 @@ class _ChangeRequestBanner extends ConsumerWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
       }
     }
   }
@@ -1168,10 +1852,10 @@ class _ChangeRequestBanner extends ConsumerWidget {
     if (uid == null) return;
     try {
       await ref.read(reservationChangeServiceProvider).rejectChangeRequest(
-            changeRequestId: request.id,
-            userId: uid,
-            notificationId: null,
-          );
+        changeRequestId: request.id,
+        userId: uid,
+        notificationId: null,
+      );
       ref.invalidate(myReservationsProvider);
       ref.invalidate(myPendingChangeRequestsProvider);
       if (context.mounted) {
@@ -1184,9 +1868,10 @@ class _ChangeRequestBanner extends ConsumerWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
       }
     }
   }
 }
-

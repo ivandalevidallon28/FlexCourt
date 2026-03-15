@@ -75,13 +75,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               Expanded(
                 child: Center(
                   child: SingleChildScrollView(
-                    padding: EdgeInsets.all(Responsive.isNarrow(context) ? 16 : 24),
+                    padding: EdgeInsets.all(
+                      Responsive.isNarrow(context)
+                          ? AppSpacing.md
+                          : AppSpacing.lg,
+                    ),
                     child: FadeTransition(
                       opacity: _fadeAnim,
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 420),
                         child: GlassCard(
-                          padding: const EdgeInsets.all(28),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.xl,
+                            vertical: AppSpacing.lg,
+                          ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -95,10 +102,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              const SizedBox(height: 24),
+                              AppSpacing.gapLgV,
                               if (_error != null) ...[
                                 Container(
-                                  padding: const EdgeInsets.all(12),
+                                  padding: AppSpacing.paddingMd,
                                   decoration: BoxDecoration(
                                     color: AppColors.error.withOpacity(0.1),
                                     borderRadius: AppRadius.radiusSm,
@@ -110,7 +117,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 16),
+                                AppSpacing.gapMdV,
                               ],
                               TextField(
                                 controller: _emailCtrl,
@@ -120,7 +127,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                 ),
                                 keyboardType: TextInputType.emailAddress,
                               ),
-                              const SizedBox(height: 16),
+                              AppSpacing.gapMdV,
                               TextField(
                                 controller: _passwordCtrl,
                                 decoration: InputDecoration(
@@ -138,7 +145,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                 ),
                                 obscureText: _obscurePassword,
                               ),
-                              const SizedBox(height: 24),
+                              AppSpacing.gapLgV,
                               SizedBox(
                                 height: 48,
                                 child: ElevatedButton(
@@ -155,7 +162,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                       : const Text('Login'),
                                 ),
                               ),
-                              const SizedBox(height: 12),
+                              AppSpacing.gapSmV,
                               TextButton(
                                 onPressed: () => context.go('/register'),
                                 child: const Text('Create account'),

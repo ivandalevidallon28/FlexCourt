@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../theme/app_design_system.dart';
 import '../theme/app_radius.dart';
 
 class GlassCard extends StatelessWidget {
@@ -21,32 +22,33 @@ class GlassCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final radius = borderRadius ?? AppRadius.radiusLg;
     return Container(
       margin: margin,
       decoration: BoxDecoration(
-        borderRadius: borderRadius ?? AppRadius.radiusLg,
+        borderRadius: radius,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.4 : 0.08),
-            blurRadius: isDark ? 16 : 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(isDark ? 0.28 : 0.06),
+            blurRadius: isDark ? 16 : 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: borderRadius ?? AppRadius.radiusLg,
+        borderRadius: radius,
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
           child: Container(
-            padding: padding ?? const EdgeInsets.all(16),
+            padding: padding ?? AppSpacing.paddingMd,
             decoration: BoxDecoration(
-              borderRadius: borderRadius ?? AppRadius.radiusLg,
+              borderRadius: radius,
               color: isDark
-                  ? Colors.white.withOpacity(0.08)
-                  : Colors.white.withOpacity(0.85),
+                  ? Colors.white.withOpacity(0.07)
+                  : Colors.white.withOpacity(0.82),
               border: Border.all(
                 color: isDark
-                    ? Colors.white.withOpacity(0.12)
+                    ? Colors.white.withOpacity(0.1)
                     : Colors.white.withOpacity(0.9),
                 width: 1,
               ),

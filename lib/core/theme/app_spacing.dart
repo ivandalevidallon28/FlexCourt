@@ -28,9 +28,18 @@ class AppSpacing {
   static const SizedBox gapMdV = SizedBox(height: md);
   static const SizedBox gapLgV = SizedBox(height: lg);
   static const SizedBox gapXlV = SizedBox(height: xl);
+  static const SizedBox gapXxlV = SizedBox(height: xxl);
 
   static const SizedBox gapXsH = SizedBox(width: xs);
   static const SizedBox gapSmH = SizedBox(width: sm);
   static const SizedBox gapMdH = SizedBox(width: md);
   static const SizedBox gapLgH = SizedBox(width: lg);
+  static const SizedBox gapXlH = SizedBox(width: xl);
+
+  /// Horizontal padding for screen content (narrow vs wide).
+  static double screenPaddingH(bool isNarrow) => isNarrow ? md : lg;
+  /// Vertical padding for screen content.
+  static const double screenPaddingV = md;
+  /// Gap between list items (cards, tiles).
+  static const double listItemGap = md;
 }

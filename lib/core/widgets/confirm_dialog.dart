@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_design_system.dart';
-import '../theme/responsive.dart';
 import 'glass_card.dart';
 
 /// Great-looking confirmation modal for add / update / delete / submit.
@@ -25,16 +24,15 @@ class ConfirmDialog extends StatelessWidget {
   final bool isDanger;
   final IconData? icon;
 
-  /// Show the dialog. Returns true if confirmed, false otherwise.
   static Future<bool> show(
-    BuildContext context, {
-    required String title,
-    String? message,
-    String confirmLabel = 'Confirm',
-    String cancelLabel = 'Cancel',
-    bool isDanger = false,
-    IconData? icon,
-  }) async {
+      BuildContext context, {
+        required String title,
+        String? message,
+        String confirmLabel = 'Confirm',
+        String cancelLabel = 'Cancel',
+        bool isDanger = false,
+        IconData? icon,
+      }) async {
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -53,72 +51,110 @@ class ConfirmDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accentColor = isDanger ? AppColors.rejected : (isDark ? AppColors.cyan400 : AppColors.blue600);
-    final defaultIcon = isDanger ? Icons.warning_amber_rounded : Icons.help_outline_rounded;
-
-    // Web/tablet: cap width and shrink padding/icon. Mobile: full width with margin.
-    final width = MediaQuery.sizeOf(context).width;
-    final isCompact = Responsive.isTabletOrWider(context);
-    final maxW = isCompact ? 420.0 : width - 48;
-    final padding = isCompact ? AppSpacing.md : 24.0;
-    final iconSize = isCompact ? 40.0 : 48.0;
-    final horizontalMargin = isCompact ? 48.0 : 24.0;
+    final accentColor = isDanger
+        ? AppColors.rejected
+        : (isDark ? AppColors.cyan400 : AppColors.blue600);
+    final defaultIcon = isDanger
+        ? Icons.warning_amber_rounded
+        : Icons.help_outline_rounded;
 
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      insetPadding: EdgeInsets.symmetric(horizontal: horizontalMargin),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxW),
+        constraints: const BoxConstraints(maxWidth: 400),
         child: GlassCard(
-          padding: EdgeInsets.all(padding),
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
           margin: EdgeInsets.zero,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon ?? defaultIcon,
-                size: iconSize,
-                color: accentColor,
+              // ── Icon in tinted circle ──────────────────────────────
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: accentColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: accentColor.withOpacity(0.25),
+                    width: 1.5,
+                  ),
+                ),
+                child: Icon(
+                  icon ?? defaultIcon,
+                  size: 32,
+                  color: accentColor,
+                ),
               ),
-              SizedBox(height: isCompact ? AppSpacing.sm : AppSpacing.md),
+              const SizedBox(height: 16),
+
+              // ── Title ──────────────────────────────────────────────
               Text(
                 title,
                 style: AppTypography.titleLarge.copyWith(
                   fontWeight: FontWeight.w700,
-                  color: isDark ? AppColors.neutral900Dark : AppColors.neutral900,
-                  fontSize: isCompact ? 20 : null,
+                  color: isDark
+                      ? AppColors.neutral900Dark
+                      : AppColors.neutral900,
                 ),
                 textAlign: TextAlign.center,
               ),
+
+              // ── Message ────────────────────────────────────────────
               if (message != null && message!.isNotEmpty) ...[
-                SizedBox(height: isCompact ? AppSpacing.xs : AppSpacing.sm),
+                const SizedBox(height: 8),
                 Text(
                   message!,
                   style: AppTypography.bodyMedium.copyWith(
-                    color: isDark ? AppColors.neutral800Dark : AppColors.neutral700,
-                    fontSize: isCompact ? 14 : null,
+                    color: isDark
+                        ? AppColors.neutral800Dark
+                        : AppColors.neutral600,
+                    height: 1.5,
                   ),
                   textAlign: TextAlign.center,
                 ),
               ],
-              SizedBox(height: isCompact ? AppSpacing.md : AppSpacing.lg),
+
+              const SizedBox(height: 24),
+
+              // ── Buttons ────────────────────────────────────────────
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      child: Text(cancelLabel),
+                    child: SizedBox(
+                      height: 46,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(cancelLabel),
+                      ),
                     ),
                   ),
-                  SizedBox(width: AppSpacing.sm),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: FilledButton(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: isDanger ? AppColors.rejected : null,
+                    child: SizedBox(
+                      height: 46,
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: isDanger
+                              ? AppColors.rejected
+                              : accentColor,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          confirmLabel,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
-                      child: Text(confirmLabel),
                     ),
                   ),
                 ],
