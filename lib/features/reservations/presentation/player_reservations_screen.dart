@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_design_system.dart';
@@ -1017,6 +1018,8 @@ class _PlayerReservationsScreenState
             changeRequest: request,
             onEdit: () => _editReservationDialog(r),
             onCancel: () => _confirmCancelReservation(r),
+            onUploadReceipt: () => _uploadReceipt(r),
+            onViewReceipt: () => _viewReceipt(r),
           );
         },
       ),
@@ -1159,6 +1162,87 @@ class _PlayerReservationsScreenState
     await ref.read(reservationsRepositoryProvider).cancelReservation(r.id);
     ref.invalidate(myReservationsProvider);
     ref.invalidate(occupiedSlotsProvider);
+  }
+
+  Future<void> _uploadReceipt(Reservation r) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 88,
+      maxWidth: 1800,
+    );
+    if (picked == null || !mounted) return;
+
+    final bytes = await picked.readAsBytes();
+    final ext = picked.name.contains('.')
+        ? picked.name.split('.').last.toLowerCase()
+        : 'jpg';
+    final contentType = switch (ext) {
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      'heic' => 'image/heic',
+      _ => 'image/jpeg',
+    };
+
+    try {
+      await ref.read(reservationsRepositoryProvider).uploadPaymentReceipt(
+            reservationId: r.id,
+            fileBytes: bytes,
+            fileExtension: ext,
+            contentType: contentType,
+          );
+      ref.invalidate(myReservationsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Receipt uploaded. Waiting for admin review.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Upload failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _viewReceipt(Reservation r) async {
+    final path = r.paymentReceiptPath;
+    if (path == null || path.isEmpty) return;
+    try {
+      final url = await ref.read(reservationsRepositoryProvider).getSignedReceiptUrl(path);
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Payment Receipt'),
+          content: InteractiveViewer(
+            child: Image.network(url, fit: BoxFit.contain),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open receipt: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _editReservationDialog(Reservation r) async {
@@ -1782,18 +1866,30 @@ class _ReservationCard extends StatelessWidget {
     required this.changeRequest,
     required this.onEdit,
     required this.onCancel,
+    required this.onUploadReceipt,
+    required this.onViewReceipt,
   });
 
   final Reservation reservation;
   final ReservationChangeRequest? changeRequest;
   final VoidCallback onEdit;
   final VoidCallback onCancel;
+  final VoidCallback onUploadReceipt;
+  final VoidCallback onViewReceipt;
 
   @override
   Widget build(BuildContext context) {
     final r = reservation;
-    final dateFmt = DateFormat.yMMMd();
     final statusColor = AppColors.statusColor(r.status);
+    final paymentColor = switch (r.paymentStatus) {
+      'PAID' => AppColors.approved,
+      'DOWNPAYMENT_PAID' => AppColors.blue600,
+      'INVALID' => AppColors.rejected,
+      'RECEIPT_UPLOADED' => AppColors.orange700,
+      _ => AppColors.neutral600,
+    };
+    final canUpload = r.status != 'CANCELLED' && r.status != 'REJECTED';
+    final hasReceipt = (r.paymentReceiptPath ?? '').isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -1879,29 +1975,67 @@ class _ReservationCard extends StatelessWidget {
                               ),
                             ),
                           ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: paymentColor.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              r.paymentStatus.replaceAll('_', ' '),
+                              style: AppTypography.labelSmall.copyWith(
+                                color: paymentColor,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                    // Action buttons — only for PENDING
-                    if (r.status == 'PENDING')
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _ActionIconButton(
-                            icon: Icons.edit_rounded,
-                            color: AppColors.blue600,
-                            tooltip: 'Edit',
-                            onTap: onEdit,
-                          ),
-                          const SizedBox(width: 4),
-                          _ActionIconButton(
-                            icon: Icons.cancel_rounded,
-                            color: AppColors.orange600,
-                            tooltip: 'Cancel',
-                            onTap: onCancel,
-                          ),
-                        ],
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    if (canUpload) ...[
+                      _ActionIconButton(
+                        icon: Icons.upload_file_rounded,
+                        color: AppColors.blue600,
+                        tooltip: 'Upload GCash receipt',
+                        onTap: onUploadReceipt,
                       ),
+                      const SizedBox(width: 6),
+                    ],
+                    if (hasReceipt) ...[
+                      _ActionIconButton(
+                        icon: Icons.receipt_long_rounded,
+                        color: AppColors.orange700,
+                        tooltip: 'View receipt',
+                        onTap: onViewReceipt,
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    const Spacer(),
+                    if (r.status == 'PENDING') ...[
+                      _ActionIconButton(
+                        icon: Icons.edit_rounded,
+                        color: AppColors.blue600,
+                        tooltip: 'Edit',
+                        onTap: onEdit,
+                      ),
+                      const SizedBox(width: 4),
+                      _ActionIconButton(
+                        icon: Icons.cancel_rounded,
+                        color: AppColors.orange600,
+                        tooltip: 'Cancel',
+                        onTap: onCancel,
+                      ),
+                    ],
                   ],
                 ),
               ],

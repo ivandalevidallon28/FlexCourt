@@ -10,6 +10,9 @@ class Reservation {
   final double price;
   final String startTime;
   final String endTime;
+  final String paymentStatus;
+  final String? paymentReceiptPath;
+  final DateTime? paymentReceiptUploadedAt;
 
   Reservation({
     required this.id,
@@ -23,6 +26,9 @@ class Reservation {
     required this.price,
     required this.startTime,
     required this.endTime,
+    this.paymentStatus = 'UNPAID',
+    this.paymentReceiptPath,
+    this.paymentReceiptUploadedAt,
   });
 
   factory Reservation.fromMap(Map<String, dynamic> map) => Reservation(
@@ -37,6 +43,13 @@ class Reservation {
         price: (map['price'] as num).toDouble(),
         startTime: map['start_time'] as String,
         endTime: map['end_time'] as String,
+        paymentStatus: (map['payment_status'] as String?) ?? 'UNPAID',
+        paymentReceiptPath: map['payment_receipt_path'] as String?,
+        paymentReceiptUploadedAt: map['payment_receipt_uploaded_at'] != null
+            ? DateTime.tryParse(
+                map['payment_receipt_uploaded_at'].toString(),
+              )
+            : null,
       );
 }
 

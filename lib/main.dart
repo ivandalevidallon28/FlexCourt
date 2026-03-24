@@ -6,6 +6,7 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_provider.dart';
 import 'core/constants/env.dart';
 import 'core/router/app_router.dart';
+import 'features/notifications/domain/notifications_providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +25,9 @@ class CourtSideApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
+    final push = ref.read(pushNotificationsServiceProvider);
+    push.init();
+    push.attachRouter(router);
     final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(

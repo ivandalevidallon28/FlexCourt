@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:typed_data';
 
 import 'reservation_model.dart';
 
@@ -241,6 +242,59 @@ class ReservationsRepository {
         )
         .subscribe();
     return channel;
+  }
+
+  Future<void> uploadPaymentReceipt({
+    required String reservationId,
+    required Uint8List fileBytes,
+    required String fileExtension,
+    required String contentType,
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) {
+      throw AuthException('Not signed in. Please log in again.');
+    }
+    final safeExt = fileExtension.toLowerCase().replaceAll('.', '');
+    final path =
+        'receipts/$userId/$reservationId/${DateTime.now().millisecondsSinceEpoch}.$safeExt';
+
+    await _client.storage.from('document').uploadBinary(
+          path,
+          fileBytes,
+          fileOptions: FileOptions(
+            contentType: contentType,
+            upsert: false,
+          ),
+        );
+
+    await _client.from('reservations').update({
+      'payment_receipt_path': path,
+      'payment_receipt_uploaded_at': DateTime.now().toIso8601String(),
+      'payment_status': 'RECEIPT_UPLOADED',
+      'payment_review_note': null,
+      'payment_reviewed_by': null,
+      'payment_reviewed_at': null,
+    }).eq('id', reservationId);
+  }
+
+  Future<String> getSignedReceiptUrl(String path, {int expiresInSeconds = 3600}) {
+    return _client.storage
+        .from('document')
+        .createSignedUrl(path, expiresInSeconds);
+  }
+
+  Future<void> setPaymentStatusByAdmin({
+    required String reservationId,
+    required String paymentStatus,
+    String? reviewNote,
+  }) async {
+    final adminId = _client.auth.currentUser?.id;
+    await _client.from('reservations').update({
+      'payment_status': paymentStatus,
+      'payment_review_note': reviewNote?.trim().isEmpty == true ? null : reviewNote?.trim(),
+      'payment_reviewed_by': adminId,
+      'payment_reviewed_at': DateTime.now().toIso8601String(),
+    }).eq('id', reservationId);
   }
 }
 

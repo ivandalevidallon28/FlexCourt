@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/push/push_notifications_service.dart';
 import '../data/notifications_repository.dart';
 import '../data/notification_model.dart';
 import 'notification_service.dart';
@@ -14,6 +15,10 @@ Provider<NotificationsRepository>((ref) {
 /// Notification business logic (when/what to notify).
 final notificationServiceProvider = Provider<NotificationService>((ref) {
   return NotificationService(Supabase.instance.client);
+});
+
+final pushNotificationsServiceProvider = Provider<PushNotificationsService>((ref) {
+  return PushNotificationsService(Supabase.instance.client);
 });
 
 /// My Notifications Provider with explicit type to avoid circular inference

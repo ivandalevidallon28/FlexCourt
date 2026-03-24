@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "788629940963",
+    "project_id": "courtside-6018c",
+    "storage_bucket": "courtside-6018c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:788629940963:android:89ea513e92120c65a533d6",
+        "android_client_info": {
+          "package_name": "com.example.court_side"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDiUv1an6RpCYE-v4M_jFBaSEFQh7IT1Q8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

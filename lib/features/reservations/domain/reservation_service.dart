@@ -43,15 +43,23 @@ class ReservationService {
       playersCount: playersCount,
       createAsAdmin: createAsAdmin,
     );
-
-    // RPC/notif disabled – manual notif page only.
-    // final userId = _client.auth.currentUser?.id;
-    // if (userId != null) {
-    //   await _notificationService.notifyReservationCreated(
-    //     userId: userId,
-    //     createAsAdmin: createAsAdmin,
-    //   );
-    // }
+    final userId = _client.auth.currentUser?.id;
+    if (userId != null) {
+      await _notificationService.notifyReservationCreated(
+        userId: userId,
+        createAsAdmin: createAsAdmin,
+      );
+    }
+    if (!createAsAdmin) {
+      await _notificationService.notifyAllAdmins(
+        title: 'New reservation request',
+        message: 'A player submitted a new reservation pending approval.',
+        data: {
+          'type': 'NEW_RESERVATION_REQUEST',
+          'reservation_id': reservation.id,
+        },
+      );
+    }
     return reservation;
   }
 
@@ -79,18 +87,33 @@ class ReservationService {
       currentStatus: currentStatus,
     );
 
-    // RPC/notif disabled – manual notif page only.
-    // final wasApproved = currentStatus?.toUpperCase() == 'APPROVED';
-    // if (wasApproved) {
-    //   final userId = _client.auth.currentUser?.id;
-    //   if (userId != null) {
-    //     await _notificationService.notifyRescheduleSubmitted(userId: userId);
-    //   }
-    // }
+    final wasApproved = currentStatus?.toUpperCase() == 'APPROVED';
+    if (wasApproved) {
+      final userId = _client.auth.currentUser?.id;
+      if (userId != null) {
+        await _notificationService.notifyRescheduleSubmitted(userId: userId);
+      }
+      await _notificationService.notifyAllAdmins(
+        title: 'Reschedule needs approval',
+        message: 'A player changed an approved reservation. Review is needed.',
+        data: {
+          'type': 'RESCHEDULE_PENDING_ADMIN',
+          'reservation_id': id,
+        },
+      );
+    }
   }
 
   Future<void> cancelReservation(String id) async {
     await _repo.cancelReservation(id);
+    await _notificationService.notifyAllAdmins(
+      title: 'Reservation cancelled',
+      message: 'A player cancelled a reservation slot.',
+      data: {
+        'type': 'RESERVATION_CANCELLED',
+        'reservation_id': id,
+      },
+    );
   }
 
   void _validateTimeRange(String startTime, String endTime) {

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../notifications/domain/notifications_providers.dart';
 import '../../reservations/domain/reservations_providers.dart';
 import '../data/reservation_change_request_model.dart';
 import '../data/reservation_change_requests_repository.dart';
@@ -15,6 +16,7 @@ final reservationChangeServiceProvider = Provider<ReservationChangeService>((ref
   return ReservationChangeService(
     ref.read(reservationChangeRequestsRepositoryProvider),
     ref.read(reservationsRepositoryProvider),
+    ref.read(notificationServiceProvider),
     Supabase.instance.client,
   );
 });

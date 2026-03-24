@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../notifications/domain/notification_service.dart';
 import '../../reservations/data/reservations_repository.dart';
 import '../data/reservation_change_request_model.dart';
 import '../data/reservation_change_requests_repository.dart';
@@ -10,11 +11,13 @@ import '../data/reservation_change_requests_repository.dart';
 class ReservationChangeService {
   final ReservationChangeRequestsRepository _changeRepo;
   final ReservationsRepository _reservationsRepo;
+  final NotificationService _notificationService;
   final SupabaseClient _client;
 
   ReservationChangeService(
     this._changeRepo,
     this._reservationsRepo,
+    this._notificationService,
     this._client,
   );
 
@@ -55,6 +58,17 @@ class ReservationChangeService {
     );
     debugPrint('[CourtSide] Change request created: ${request.id} for reservation $reservationId');
     // Notification is inserted by DB trigger notify_on_change_request_insert (so Notifications page shows it).
+    await _notificationService.pushOnlyToUser(
+      userId: playerId,
+      title: 'Reservation Change Request',
+      message:
+          'Admin requested to change your reservation schedule. Please review in Notifications.',
+      data: {
+        'type': 'reservation_change_request',
+        'reservation_id': reservationId,
+        'change_request_id': request.id,
+      },
+    );
     return request;
   }
 
@@ -80,6 +94,14 @@ class ReservationChangeService {
     );
     await _changeRepo.updateStatus(changeRequestId, 'ACCEPTED');
     await _markNotificationReadForChangeRequest(changeRequestId, notificationId);
+    await _notificationService.notifyAllAdmins(
+      title: 'Change request accepted',
+      message: 'Player accepted the reservation change request.',
+      data: {
+        'type': 'CHANGE_REQUEST_ACCEPTED',
+        'reservation_id': request.reservationId,
+      },
+    );
   }
 
   /// Player rejects the change. Reservation stays unchanged.
@@ -96,6 +118,14 @@ class ReservationChangeService {
 
     await _changeRepo.updateStatus(changeRequestId, 'REJECTED');
     await _markNotificationReadForChangeRequest(changeRequestId, notificationId);
+    await _notificationService.notifyAllAdmins(
+      title: 'Change request rejected',
+      message: 'Player rejected the reservation change request.',
+      data: {
+        'type': 'CHANGE_REQUEST_REJECTED',
+        'reservation_id': request.reservationId,
+      },
+    );
   }
 
   Future<void> _markNotificationReadForChangeRequest(

@@ -48,7 +48,9 @@ final adminPendingReservationsProvider =
   final client = Supabase.instance.client;
   final res = await client
       .from('reservations')
-      .select('*, users(name,email), courts(name), categories(name)')
+      .select(
+        '*, users:users!reservations_user_id_fkey(name,email,contact_number), courts(name), categories(name)',
+      )
       .eq('status', 'PENDING')
       .order('date')
       .order('start_time');
@@ -61,7 +63,9 @@ final adminAdminReservationsProvider =
   final client = Supabase.instance.client;
   final res = await client
       .from('reservations')
-      .select('*, users(name,email), courts(name), categories(name)')
+      .select(
+        '*, users:users!reservations_user_id_fkey(name,email), courts(name), categories(name)',
+      )
       .eq('status', 'ADMIN')
       .order('date')
       .order('start_time');
@@ -83,7 +87,9 @@ final adminScheduleProvider = FutureProvider.autoDispose
     .family<List<Map<String, dynamic>>, ({String date, String? eventType})>((ref, params) async {
   var query = Supabase.instance.client
       .from('reservations')
-      .select('*, users(name,email), courts(name,sport_type), categories(name)')
+      .select(
+        '*, users:users!reservations_user_id_fkey(name,email), courts(name,sport_type), categories(name)',
+      )
       .eq('date', params.date);
   if (params.eventType != null && params.eventType!.isNotEmpty) {
     query = query.eq('event_type', params.eventType!);
