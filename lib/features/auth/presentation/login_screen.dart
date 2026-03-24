@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_design_system.dart';
 import '../../../core/theme/responsive.dart';
+import '../../../core/utils/error_handling.dart';
 import '../../../core/widgets/glass_card.dart';
 import '../../../core/widgets/gradient_app_bar.dart';
 import '../domain/auth_providers.dart';
@@ -193,7 +194,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       ref.invalidate(currentUserProfileProvider);
       if (mounted) context.go('/home');
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = userFriendlyErrorMessage(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

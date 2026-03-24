@@ -145,6 +145,21 @@ class _AdminEditReservationDialogState
 
   String _fmtHour(int h) => '${h.toString().padLeft(2, '0')}:00';
 
+  /// True when date or start/end hour differ from original (so submit is allowed).
+  bool _hasChanges() {
+    if (_startHour == null || _endHour == null) return false;
+    final origDateStr = (r['date']?.toString() ?? '').substring(0, 10);
+    final pickedDateStr = _pickedDate.toIso8601String().substring(0, 10);
+    final startHhMm = toHhMm(r['start_time']);
+    final endHhMm = toHhMm(r['end_time']);
+    final origStartHour = startHhMm.length >= 2 ? int.tryParse(startHhMm.substring(0, 2)) : null;
+    final origEndHour = endHhMm.length >= 2 ? int.tryParse(endHhMm.substring(0, 2)) : null;
+    if (origStartHour == null || origEndHour == null) return true;
+    return pickedDateStr != origDateStr ||
+        _startHour != origStartHour ||
+        _endHour != origEndHour;
+  }
+
   // ── Save ────────────────────────────────────────────────────────────────
 
   Future<void> _onSave() async {
@@ -156,6 +171,25 @@ class _AdminEditReservationDialogState
     final endStr = _fmtHour(_endHour!);
     if (_startHour! >= _endHour!) {
       setState(() => _error = 'End time must be after start time.');
+      return;
+    }
+
+    // Guard: don't save if nothing changed
+    final origDateStr = (r['date']?.toString() ?? '').substring(0, 10);
+    final pickedDateStr = _pickedDate.toIso8601String().substring(0, 10);
+    final origStart = toHhMm(r['start_time']);
+    final origEnd = toHhMm(r['end_time']);
+    if (pickedDateStr == origDateStr &&
+        startStr == origStart &&
+        endStr == origEnd) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No changes made. Date and time are unchanged.'),
+            backgroundColor: AppColors.neutral600,
+          ),
+        );
+      }
       return;
     }
 
@@ -568,7 +602,7 @@ class _AdminEditReservationDialogState
                   child: SizedBox(
                     height: 48,
                     child: ElevatedButton.icon(
-                      onPressed: _saving ? null : _onSave,
+                      onPressed: _saving || !_hasChanges() ? null : _onSave,
                       icon: _saving
                           ? const SizedBox(
                         width: 16,
@@ -578,7 +612,7 @@ class _AdminEditReservationDialogState
                       )
                           : const Icon(Icons.send_rounded, size: 18),
                       label:
-                      Text(_saving ? 'Sending…' : 'Send Request'),
+                      Text(_saving ? 'Sending…' : _hasChanges() ? 'Send Request' : 'No changes'),
                       style: ElevatedButton.styleFrom(
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),

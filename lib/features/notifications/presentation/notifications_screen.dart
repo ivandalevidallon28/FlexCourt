@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/theme/app_design_system.dart';
+import '../../../core/utils/error_handling.dart';
 import '../../../core/widgets/async_value_view.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/gradient_app_bar.dart';
@@ -179,7 +180,7 @@ class NotificationsScreen extends ConsumerWidget {
         } catch (e) {
           if (context.mounted) {
             ScaffoldMessenger.of(context)
-                .showSnackBar(SnackBar(content: Text('Error: $e')));
+                .showSnackBar(SnackBar(content: Text(userFriendlyErrorMessage(e)), backgroundColor: Colors.red.shade700));
           }
         }
       }
@@ -210,47 +211,51 @@ class NotificationsScreen extends ConsumerWidget {
         } catch (e) {
           if (context.mounted) {
             ScaffoldMessenger.of(context)
-                .showSnackBar(SnackBar(content: Text('Error: $e')));
+                .showSnackBar(SnackBar(content: Text(userFriendlyErrorMessage(e)), backgroundColor: Colors.red.shade700));
           }
         }
       }
           : null,
-      onCancel: () async {
-        await ref
-            .read(notificationsRepositoryProvider)
-            .handleAdminEditDecision(
-          notificationId: n.id,
-          reservationId: n.reservationId!,
-          accept: false,
-        );
-        ref.invalidate(myNotificationsProvider);
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Reservation cancelled.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      },
-      onGetIt: () async {
-        await ref
-            .read(notificationsRepositoryProvider)
-            .handleAdminEditDecision(
-          notificationId: n.id,
-          reservationId: n.reservationId!,
-          accept: true,
-        );
-        ref.invalidate(myNotificationsProvider);
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Got it. Reservation approved.'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      },
+      onCancel: n.reservationId != null
+          ? () async {
+              await ref
+                  .read(notificationsRepositoryProvider)
+                  .handleAdminEditDecision(
+                notificationId: n.id,
+                reservationId: n.reservationId!,
+                accept: false,
+              );
+              ref.invalidate(myNotificationsProvider);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Reservation cancelled.'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
+          : () async {},
+      onGetIt: n.reservationId != null
+          ? () async {
+              await ref
+                  .read(notificationsRepositoryProvider)
+                  .handleAdminEditDecision(
+                notificationId: n.id,
+                reservationId: n.reservationId!,
+                accept: true,
+              );
+              ref.invalidate(myNotificationsProvider);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Got it. Reservation approved.'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            }
+          : () async {},
       onMarkRead: () => ref
           .read(notificationsRepositoryProvider)
           .markAsRead(n.id)

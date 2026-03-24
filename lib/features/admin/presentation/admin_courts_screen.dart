@@ -224,6 +224,26 @@ class _AdminCourtsScreenState extends ConsumerState<AdminCourtsScreen> {
                 );
                 return;
               }
+              final newName = nameCtrl.text.trim();
+              final newSport = sportCtrl.text.trim();
+              final newDesc = descCtrl.text.trim();
+              if (isEdit) {
+                final sameName = newName == court!.name;
+                final sameSport = newSport == court.sportType;
+                final sameDesc = newDesc == (court.description ?? '');
+                if (sameName && sameSport && sameDesc) {
+                  if (ctx.mounted) {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(
+                        content: Text('No changes to save.'),
+                        backgroundColor: AppColors.neutral600,
+                      ),
+                    );
+                  }
+                  return;
+                }
+              }
               final confirmed = await ConfirmDialog.show(
                 ctx,
                 title: isEdit ? 'Save changes?' : 'Add this court?',
@@ -239,18 +259,9 @@ class _AdminCourtsScreenState extends ConsumerState<AdminCourtsScreen> {
               if (!confirmed || !ctx.mounted) return;
               final repo = ref.read(courtsRepositoryProvider);
               if (!isEdit) {
-                await repo.createCourt(
-                  nameCtrl.text.trim(),
-                  sportCtrl.text.trim(),
-                  descCtrl.text.trim(),
-                );
+                await repo.createCourt(newName, newSport, newDesc);
               } else {
-                await repo.updateCourt(
-                  court!.id,
-                  nameCtrl.text.trim(),
-                  sportCtrl.text.trim(),
-                  descCtrl.text.trim(),
-                );
+                await repo.updateCourt(court!.id, newName, newSport, newDesc);
               }
               if (ctx.mounted) Navigator.pop(ctx);
               ref.invalidate(courtsListProvider);

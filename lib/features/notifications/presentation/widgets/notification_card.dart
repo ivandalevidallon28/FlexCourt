@@ -40,7 +40,7 @@ class NotificationCard extends StatelessWidget {
     final isRead = n.isRead;
 
     // ── Icon + color by type ──────────────────────────────────────────────
-    final (typeIcon, typeColor) = _typeAssets(n.type!);
+    final (typeIcon, typeColor) = _typeAssets(n.type ?? 'GENERAL');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),

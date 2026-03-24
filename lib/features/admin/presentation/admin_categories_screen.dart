@@ -225,6 +225,18 @@ class _AdminCategoriesScreenState
                 );
                 return;
               }
+              if (isEdit && name == category!.name) {
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(
+                      content: Text('No changes to save.'),
+                      backgroundColor: AppColors.neutral600,
+                    ),
+                  );
+                }
+                return;
+              }
               final confirmed = await ConfirmDialog.show(
                 ctx,
                 title: isEdit ? 'Save changes?' : 'Add this category?',

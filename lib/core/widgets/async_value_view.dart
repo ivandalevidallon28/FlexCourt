@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../theme/app_design_system.dart';
-import 'error_view.dart';
-import 'loading_view.dart';
+import '../utils/error_handling.dart';
 
 /// Renders AsyncValue with consistent loading, error, and empty states.
 /// Keeps UI separate from state; use for list/data screens.
@@ -36,7 +35,7 @@ class AsyncValueView<T> extends StatelessWidget {
       },
       loading: () => loading?.call() ?? const LoadingView(),
       error: (e, st) =>
-      error?.call(e, st) ?? ErrorView(message: e.toString()),
+          error?.call(e, st) ?? ErrorView(message: userFriendlyErrorMessage(e)),
     );
   }
 }

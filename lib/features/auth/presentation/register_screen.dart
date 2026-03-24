@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_design_system.dart';
 import '../../../core/theme/responsive.dart';
+import '../../../core/utils/error_handling.dart';
 import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/glass_card.dart';
 import '../../../core/widgets/gradient_app_bar.dart';
@@ -228,16 +229,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       );
       context.go('/home');
     } catch (e) {
-      final msg = e.toString().toLowerCase();
-      if (msg.contains('already') ||
-          msg.contains('duplicate') ||
-          msg.contains('registered') ||
-          msg.contains('unique')) {
-        setState(() =>
-            _error = 'This email is already registered. Use another or sign in.');
-      } else {
-        setState(() => _error = e.toString());
-      }
+      if (mounted) setState(() => _error = userFriendlyErrorMessage(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

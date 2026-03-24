@@ -8,6 +8,7 @@ import 'package:table_calendar/table_calendar.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_design_system.dart';
 import '../../../core/theme/responsive.dart';
+import '../../../core/utils/error_handling.dart';
 import '../../../core/utils/slot_utils.dart';
 import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/empty_state.dart';
@@ -792,9 +793,11 @@ class _PlayerReservationsScreenState
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<int>(
+                      key: ValueKey<int?>(_startTime?.hour),
                       value: validStart ? startHour : null,
                       decoration: InputDecoration(
                         labelText: 'Start',
+                        hintText: validStart ? null : 'Select start',
                         prefixIcon: const Icon(Icons.play_arrow_rounded, size: 18),
                         border: _inputBorder(),
                         enabledBorder: _inputBorder(),
@@ -830,9 +833,11 @@ class _PlayerReservationsScreenState
                   ),
                   Expanded(
                     child: DropdownButtonFormField<int>(
+                      key: ValueKey<int?>(_endTime?.hour),
                       value: validEnd ? _endTime!.hour : null,
                       decoration: InputDecoration(
                         labelText: 'End',
+                        hintText: validEnd ? null : 'Select end',
                         prefixIcon: const Icon(Icons.stop_rounded, size: 18),
                         border: _inputBorder(),
                         enabledBorder: _inputBorder(),
@@ -1129,10 +1134,22 @@ class _PlayerReservationsScreenState
   }
 
   Future<void> _confirmCancelReservation(Reservation r) async {
+    final parts = r.startTime.split(':');
+    final startHour = parts.isNotEmpty ? int.tryParse(parts[0]) ?? 0 : 0;
+    final startMin = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+    final slotStart = DateTime(r.date.year, r.date.month, r.date.day, startHour, startMin);
+    final now = DateTime.now();
+    const twoHours = Duration(hours: 2);
+    final isLateCancel = slotStart.difference(now) <= twoHours && slotStart.isAfter(now);
+
+    final message = isLateCancel
+        ? 'This reservation will be cancelled. Cancelling within 2 hours of the slot start may be subject to admin review.'
+        : 'This reservation will be cancelled. The slot may become available for others.';
+
     final confirmed = await ConfirmDialog.show(
       context,
       title: 'Cancel reservation?',
-      message: 'This reservation will be cancelled.',
+      message: message,
       confirmLabel: 'Yes, cancel',
       cancelLabel: 'Keep it',
       isDanger: true,
@@ -1145,156 +1162,14 @@ class _PlayerReservationsScreenState
   }
 
   Future<void> _editReservationDialog(Reservation r) async {
-    final eventCtrl = TextEditingController(text: r.eventType);
-    final playersCtrl = TextEditingController(text: r.playersCount.toString());
-    DateTime selectedDate = r.date;
-    TimeOfDay start = TimeOfDay(
-      hour: int.parse(r.startTime.split(':')[0]),
-      minute: int.parse(r.startTime.split(':')[1]),
-    );
-    TimeOfDay end = TimeOfDay(
-      hour: int.parse(r.endTime.split(':')[0]),
-      minute: int.parse(r.endTime.split(':')[1]),
-    );
-
     final isReschedule = r.status == 'APPROVED';
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(isReschedule ? 'Reschedule' : 'Edit Reservation'),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Date picker row
-              _EditRow(
-                icon: Icons.calendar_today_rounded,
-                label: DateFormat.yMMMd().format(selectedDate),
-                onTap: () async {
-                  final d = await showDatePicker(
-                    context: ctx,
-                    initialDate: selectedDate,
-                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                  );
-                  if (d != null) selectedDate = d;
-                },
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: _EditRow(
-                      icon: Icons.play_arrow_rounded,
-                      label: start.format(ctx),
-                      onTap: () async {
-                        final t = await showTimePicker(context: ctx, initialTime: start);
-                        if (t != null) start = t;
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _EditRow(
-                      icon: Icons.stop_rounded,
-                      label: end.format(ctx),
-                      onTap: () async {
-                        final t = await showTimePicker(context: ctx, initialTime: end);
-                        if (t != null) end = t;
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: eventCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Event type',
-                  prefixIcon: Icon(Icons.sports_rounded, size: 18),
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: playersCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Players count',
-                  prefixIcon: Icon(Icons.group_rounded, size: 18),
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final confirmed = await ConfirmDialog.show(
-                ctx,
-                title: isReschedule ? 'Submit reschedule?' : 'Save changes?',
-                message: isReschedule
-                    ? 'Your reschedule will need admin approval again.'
-                    : 'Reservation details will be updated.',
-                confirmLabel: isReschedule ? 'Yes, submit' : 'Yes, save',
-                cancelLabel: 'Cancel',
-                icon: Icons.save_outlined,
-              );
-              if (!confirmed || !ctx.mounted) return;
-              try {
-                await ref.read(reservationServiceProvider).updateReservation(
-                  id: r.id,
-                  courtId: r.courtId,
-                  date: selectedDate,
-                  startTime: _formatTime(start),
-                  endTime: _formatTime(end),
-                  eventType: eventCtrl.text.trim(),
-                  playersCount:
-                  int.tryParse(playersCtrl.text.trim()) ?? r.playersCount,
-                  currentStatus: r.status,
-                );
-                if (ctx.mounted) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(isReschedule
-                          ? 'Reschedule submitted — pending approval.'
-                          : 'Reservation updated.'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-                ref.invalidate(myReservationsProvider);
-                ref.invalidate(occupiedSlotsProvider);
-              } catch (e) {
-                if (ctx.mounted) {
-                  final msg = e.toString().toLowerCase();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        (msg.contains('already') || msg.contains('booked'))
-                            ? 'That time slot is already booked. Choose another.'
-                            : e.toString(),
-                      ),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
+      builder: (ctx) => _EditReservationDialogContent(
+        r: r,
+        ref: ref,
+        isReschedule: isReschedule,
+        parentContext: context,
       ),
     );
   }
@@ -1303,6 +1178,371 @@ class _PlayerReservationsScreenState
 // ─────────────────────────────────────────────────────────────────────────────
 // Sub-widgets
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// Edit reservation dialog with state so Save is disabled when nothing changed.
+class _EditReservationDialogContent extends ConsumerStatefulWidget {
+  const _EditReservationDialogContent({
+    required this.r,
+    required this.ref,
+    required this.isReschedule,
+    required this.parentContext,
+  });
+
+  final Reservation r;
+  final WidgetRef ref;
+  final bool isReschedule;
+  final BuildContext parentContext;
+
+  static String _timeToStr(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  static const _bookingHours = [
+    6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22
+  ];
+
+  @override
+  ConsumerState<_EditReservationDialogContent> createState() =>
+      _EditReservationDialogContentState();
+}
+
+class _EditReservationDialogContentState
+    extends ConsumerState<_EditReservationDialogContent> {
+  static String _normTime(String t) =>
+      t.length >= 5 ? t.substring(0, 5) : t;
+
+  List<int> _availableEndsFor(
+      List<({String start, String end})> occupied, int startHour) {
+    final startStr = '${startHour.toString().padLeft(2, '0')}:00';
+    return [
+      for (var h = startHour + 1; h <= 23; h++)
+        if (!slotOverlaps(
+            startStr, '${h.toString().padLeft(2, '0')}:00', occupied))
+          h
+    ];
+  }
+  late final TextEditingController _eventCtrl;
+  late final TextEditingController _playersCtrl;
+  late DateTime _selectedDate;
+  late TimeOfDay _start;
+  late TimeOfDay _end;
+
+  @override
+  void initState() {
+    super.initState();
+    _eventCtrl = TextEditingController(text: widget.r.eventType);
+    _playersCtrl = TextEditingController(text: widget.r.playersCount.toString());
+    _eventCtrl.addListener(() => setState(() {}));
+    _playersCtrl.addListener(() => setState(() {}));
+    _selectedDate = widget.r.date;
+    _start = TimeOfDay(
+      hour: int.parse(widget.r.startTime.split(':')[0]),
+      minute: int.parse(widget.r.startTime.split(':').length > 1
+          ? widget.r.startTime.split(':')[1]
+          : '0'),
+    );
+    _end = TimeOfDay(
+      hour: int.parse(widget.r.endTime.split(':')[0]),
+      minute: int.parse(widget.r.endTime.split(':').length > 1
+          ? widget.r.endTime.split(':')[1]
+          : '0'),
+    );
+  }
+
+  @override
+  void dispose() {
+    _eventCtrl.dispose();
+    _playersCtrl.dispose();
+    super.dispose();
+  }
+
+  bool get _hasChanges {
+    final dateUnchanged =
+        _selectedDate.year == widget.r.date.year &&
+            _selectedDate.month == widget.r.date.month &&
+            _selectedDate.day == widget.r.date.day;
+    final newStartStr = _EditReservationDialogContent._timeToStr(_start);
+    final newEndStr = _EditReservationDialogContent._timeToStr(_end);
+    final timeUnchanged =
+        newStartStr == widget.r.startTime && newEndStr == widget.r.endTime;
+    final newEvent = _eventCtrl.text.trim();
+    final newPlayers =
+        int.tryParse(_playersCtrl.text.trim()) ?? widget.r.playersCount;
+    final detailsUnchanged =
+        newEvent == widget.r.eventType && newPlayers == widget.r.playersCount;
+    return !(dateUnchanged && timeUnchanged && detailsUnchanged);
+  }
+
+  Future<void> _onSave() async {
+    final ctx = context;
+    final newEvent = _eventCtrl.text.trim();
+    final newPlayers =
+        int.tryParse(_playersCtrl.text.trim()) ?? widget.r.playersCount;
+    final newStartStr = _EditReservationDialogContent._timeToStr(_start);
+    final newEndStr = _EditReservationDialogContent._timeToStr(_end);
+    final confirmed = await ConfirmDialog.show(
+      ctx,
+      title: widget.isReschedule ? 'Submit reschedule?' : 'Save changes?',
+      message: widget.isReschedule
+          ? 'Your reschedule will need admin approval again.'
+          : 'Reservation details will be updated.',
+      confirmLabel: widget.isReschedule ? 'Yes, submit' : 'Yes, save',
+      cancelLabel: 'Cancel',
+      icon: Icons.save_outlined,
+    );
+    if (!confirmed || !mounted) return;
+    try {
+      await widget.ref.read(reservationServiceProvider).updateReservation(
+        id: widget.r.id,
+        courtId: widget.r.courtId,
+        date: _selectedDate,
+        startTime: newStartStr,
+        endTime: newEndStr,
+        eventType: newEvent,
+        playersCount: newPlayers,
+        currentStatus: widget.r.status,
+      );
+      if (mounted) {
+        Navigator.pop(ctx);
+        ScaffoldMessenger.of(widget.parentContext).showSnackBar(
+          SnackBar(
+            content: Text(widget.isReschedule
+                ? 'Reschedule submitted — pending approval.'
+                : 'Reservation updated.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      widget.ref.invalidate(myReservationsProvider);
+      widget.ref.invalidate(occupiedSlotsProvider);
+    } catch (e) {
+      if (mounted) {
+        final msg = e.toString().toLowerCase();
+        ScaffoldMessenger.of(widget.parentContext).showSnackBar(
+          SnackBar(
+            content: Text(
+              (msg.contains('already') || msg.contains('booked'))
+                  ? 'That time slot is already booked. Choose another.'
+                  : e.toString(),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  OutlineInputBorder _inputBorder({bool focused = false}) {
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(
+        color: focused ? AppColors.blue600 : AppColors.neutral300,
+        width: focused ? 1.5 : 1,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ctx = context;
+    final dateKey = _selectedDate.toIso8601String().substring(0, 10);
+    final occupiedAsync = ref.watch(occupiedSlotsProvider(
+        (courtId: widget.r.courtId, date: dateKey)));
+
+    return AlertDialog(
+      title: Text(widget.isReschedule ? 'Reschedule' : 'Edit Reservation'),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _EditRow(
+              icon: Icons.calendar_today_rounded,
+              label: DateFormat.yMMMd().format(_selectedDate),
+              onTap: () async {
+                final d = await showDatePicker(
+                  context: ctx,
+                  initialDate: _selectedDate,
+                  firstDate:
+                      DateTime.now().subtract(const Duration(days: 365)),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (d != null) setState(() => _selectedDate = d);
+              },
+            ),
+            const SizedBox(height: 12),
+            occupiedAsync.when(
+              data: (occupied) {
+                final r = widget.r;
+                final occupiedExcludingCurrent = occupied.where((o) =>
+                    !(_normTime(o.start) == _normTime(r.startTime) &&
+                        _normTime(o.end) == _normTime(r.endTime))).toList();
+                final availableStarts = [
+                  for (final h in _EditReservationDialogContent._bookingHours)
+                    if (!slotOverlaps(
+                      '${h.toString().padLeft(2, '0')}:00',
+                      '${(h + 1).toString().padLeft(2, '0')}:00',
+                      occupiedExcludingCurrent,
+                    ))
+                      h
+                ];
+                final startHour = _start.hour;
+                final validStart =
+                    availableStarts.isNotEmpty &&
+                        availableStarts.contains(startHour);
+                final ends = validStart
+                    ? _availableEndsFor(occupiedExcludingCurrent, startHour)
+                    : <int>[];
+                final validEnd = validStart &&
+                    _end.hour > startHour &&
+                    ends.contains(_end.hour);
+
+                if (availableStarts.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      'No slots available on this date. Pick another day.',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.rejected,
+                      ),
+                    ),
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        key: ValueKey<int?>(_start.hour),
+                        value: validStart ? startHour : null,
+                        decoration: InputDecoration(
+                          labelText: 'Start',
+                          hintText: validStart ? null : 'Select start',
+                          prefixIcon: const Icon(
+                            Icons.play_arrow_rounded,
+                            size: 18,
+                          ),
+                          border: _inputBorder(),
+                          enabledBorder: _inputBorder(),
+                          focusedBorder: _inputBorder(focused: true),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                        items: availableStarts
+                            .map((h) => DropdownMenuItem(
+                                  value: h,
+                                  child: Text(
+                                      '${h.toString().padLeft(2, '0')}:00'),
+                                ))
+                            .toList(),
+                        onChanged: (h) {
+                          if (h == null) return;
+                          final e =
+                              _availableEndsFor(occupiedExcludingCurrent, h);
+                          setState(() {
+                            _start = TimeOfDay(hour: h, minute: 0);
+                            _end = e.isNotEmpty
+                                ? TimeOfDay(hour: e.first, minute: 0)
+                                : TimeOfDay(hour: h + 1, minute: 0);
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        key: ValueKey<int?>(_end.hour),
+                        value: validEnd ? _end.hour : null,
+                        decoration: InputDecoration(
+                          labelText: 'End',
+                          hintText: validEnd ? null : 'Select end',
+                          prefixIcon: const Icon(Icons.stop_rounded, size: 18),
+                          border: _inputBorder(),
+                          enabledBorder: _inputBorder(),
+                          focusedBorder: _inputBorder(focused: true),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                        items: ends
+                            .map((h) => DropdownMenuItem(
+                                  value: h,
+                                  child: Text(
+                                      '${h.toString().padLeft(2, '0')}:00'),
+                                ))
+                            .toList(),
+                        onChanged: validStart
+                            ? (h) {
+                                if (h == null) return;
+                                setState(() =>
+                                    _end = TimeOfDay(hour: h, minute: 0));
+                              }
+                            : null,
+                      ),
+                    ),
+                  ],
+                );
+              },
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Center(
+                  child: SizedBox(
+                    height: 24,
+                    width: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ),
+              error: (_, __) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'Could not load availability. Try again.',
+                  style: AppTypography.bodySmall
+                      .copyWith(color: AppColors.rejected),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _eventCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Event type',
+                prefixIcon: Icon(Icons.sports_rounded, size: 18),
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _playersCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Players count',
+                prefixIcon: Icon(Icons.group_rounded, size: 18),
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _hasChanges ? _onSave : null,
+          child: Text(_hasChanges ? 'Save' : 'No changes'),
+        ),
+      ],
+    );
+  }
+}
 
 class _AdminBadge extends StatelessWidget {
   @override
@@ -1841,7 +2081,8 @@ class _ChangeRequestBanner extends ConsumerWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text(userFriendlyErrorMessage(e)),
+              backgroundColor: Colors.red.shade700),
         );
       }
     }
@@ -1869,7 +2110,8 @@ class _ChangeRequestBanner extends ConsumerWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text(userFriendlyErrorMessage(e)),
+              backgroundColor: Colors.red.shade700),
         );
       }
     }

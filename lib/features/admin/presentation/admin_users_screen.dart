@@ -180,6 +180,22 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
+              final newName = nameCtrl.text.trim();
+              final newContact = contactCtrl.text.trim();
+              final origName = (user['name']?.toString() ?? '').trim();
+              final origContact = (user['contact_number']?.toString() ?? '').trim();
+              if (newName == origName && newContact == origContact) {
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(
+                      content: Text('No changes to save.'),
+                      backgroundColor: AppColors.neutral600,
+                    ),
+                  );
+                }
+                return;
+              }
               final confirmed = await ConfirmDialog.show(
                 ctx,
                 title: 'Save changes?',
@@ -190,8 +206,8 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
               );
               if (!confirmed || !ctx.mounted) return;
               await Supabase.instance.client.from('users').update({
-                'name': nameCtrl.text.trim(),
-                'contact_number': contactCtrl.text.trim(),
+                'name': newName,
+                'contact_number': newContact,
               }).eq('id', user['id']);
               if (ctx.mounted) Navigator.pop(ctx);
               ref.invalidate(adminUsersListProvider);
