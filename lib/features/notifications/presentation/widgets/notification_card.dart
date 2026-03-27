@@ -175,20 +175,21 @@ class NotificationCard extends StatelessWidget {
             const SizedBox(height: 10),
 
             // ── Action row ───────────────────────────────────────────────
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // Use Wrap to prevent small right-side overflows on narrow screens.
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 6,
               children: [
                 // Timestamp
-                if (n.createdAt != null)
-                  Text(
-                    _relativeTime(n.createdAt!),
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.neutral400,
-                      fontSize: 11,
-                    ),
-                  )
-                else
-                  const SizedBox.shrink(),
+                Text(
+                  _relativeTime(n.createdAt),
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.neutral400,
+                    fontSize: 11,
+                  ),
+                ),
 
                 // Action buttons
                 _buildActions(
