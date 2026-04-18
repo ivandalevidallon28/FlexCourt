@@ -10,6 +10,7 @@ import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/glass_card.dart';
 import '../../../core/widgets/gradient_app_bar.dart';
 import '../../notifications/domain/notifications_providers.dart';
+import '../../reservations/domain/reservations_providers.dart';
 import '../domain/admin_providers.dart';
 import 'widgets/admin_edit_reservation_dialog.dart';
 
@@ -24,6 +25,9 @@ class AdminPendingReservationsScreen extends ConsumerStatefulWidget {
 class _AdminPendingReservationsScreenState
     extends ConsumerState<AdminPendingReservationsScreen> {
   RealtimeChannel? _channel;
+  bool _filterWithReceipt = false;
+  bool _filterNeedsPaymentReview = false;
+  bool _filterTodayOnly = false;
 
   @override
   void dispose() {
@@ -103,13 +107,91 @@ class _AdminPendingReservationsScreenState
                   ),
                 ),
                 const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilterChip(
+                        label: const Text('With receipt'),
+                        selected: _filterWithReceipt,
+                        onSelected: (v) => setState(() => _filterWithReceipt = v),
+                      ),
+                      FilterChip(
+                        label: const Text('Needs payment review'),
+                        selected: _filterNeedsPaymentReview,
+                        onSelected: (v) =>
+                            setState(() => _filterNeedsPaymentReview = v),
+                      ),
+                      FilterChip(
+                        label: const Text('Starts today'),
+                        selected: _filterTodayOnly,
+                        onSelected: (v) => setState(() => _filterTodayOnly = v),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
                 // ── List ───────────────────────────────────────────────
                 Expanded(
-                  child: ListView.builder(
+                  child: Builder(builder: (_) {
+                    final today = DateTime.now().toIso8601String().substring(0, 10);
+                    final filtered = list.where((r) {
+                      if (_filterWithReceipt) {
+                        final has =
+                            (r['payment_receipt_path']?.toString().isNotEmpty ?? false);
+                        if (!has) return false;
+                      }
+                      if (_filterNeedsPaymentReview) {
+                        final ps = (r['payment_status']?.toString() ?? 'UNPAID');
+                        if (ps != 'RECEIPT_UPLOADED') return false;
+                      }
+                      if (_filterTodayOnly) {
+                        final rawDate = (r['date']?.toString() ?? '');
+                        final date =
+                            rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate;
+                        if (date != today) return false;
+                      }
+                      return true;
+                    }).toList()
+                      ..sort((a, b) {
+                        int score(Map<String, dynamic> r) {
+                          var s = 0;
+                          final ps = (r['payment_status']?.toString() ?? 'UNPAID');
+                          if (ps == 'RECEIPT_UPLOADED') s += 50;
+                          final hasReceipt = (r['payment_receipt_path']
+                                  ?.toString()
+                                  .isNotEmpty ??
+                              false);
+                          if (hasReceipt) s += 20;
+                          return s;
+                        }
+
+                        final sa = score(a);
+                        final sb = score(b);
+                        if (sa != sb) return sb.compareTo(sa);
+                        final da = (a['date']?.toString() ?? '');
+                        final db = (b['date']?.toString() ?? '');
+                        if (da != db) return da.compareTo(db);
+                        final ta = (a['start_time']?.toString() ?? '');
+                        final tb = (b['start_time']?.toString() ?? '');
+                        return ta.compareTo(tb);
+                      });
+
+                    if (filtered.isEmpty) {
+                      return const EmptyState(
+                        icon: Icons.filter_alt_off_rounded,
+                        title: 'No matches',
+                        subtitle: 'Try removing one of the quick filters.',
+                      );
+                    }
+
+                    return ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                    itemCount: list.length,
+                    itemCount: filtered.length,
                     itemBuilder: (context, index) {
-                      final r = list[index];
+                      final r = filtered[index];
                       return _PendingCard(
                         reservation: r,
                         onEdit: () => AdminEditReservationDialog.show(
@@ -131,9 +213,11 @@ class _AdminPendingReservationsScreenState
                             _setPaymentStatus(r, paymentStatus: 'PAID'),
                         onViewReceipt: () => _viewReceipt(r),
                         onCallUser: () => _callUser(r),
+                        onViewTimeline: () => _viewTimeline(r),
                       );
                     },
-                  ),
+                  );
+                  }),
                 ),
               ],
             );
@@ -186,7 +270,12 @@ class _AdminPendingReservationsScreenState
     try {
       final res = await client
           .from('reservations')
-          .update({'status': status})
+          .update({
+            'status': status,
+            if (status == 'APPROVED')
+              'payment_due_at':
+                  DateTime.now().add(const Duration(hours: 6)).toIso8601String(),
+          })
           .eq('id', id)
           .select('id')
           .maybeSingle();
@@ -208,7 +297,7 @@ class _AdminPendingReservationsScreenState
                   ? 'Reservation approved'
                   : 'Reservation rejected',
               message: status == 'APPROVED'
-                  ? 'Your reservation has been approved.'
+                  ? 'Your reservation has been approved. Payment deadline is 6 hours.'
                   : 'Your reservation has been rejected.',
               type: status == 'APPROVED'
                   ? 'RESERVATION_APPROVED'
@@ -247,12 +336,10 @@ class _AdminPendingReservationsScreenState
     final userId = r['user_id']?.toString() ?? '';
     if (id == null || id.isEmpty) return;
     try {
-      final client = Supabase.instance.client;
-      await client.from('reservations').update({
-        'payment_status': paymentStatus,
-        'payment_reviewed_by': client.auth.currentUser?.id,
-        'payment_reviewed_at': DateTime.now().toIso8601String(),
-      }).eq('id', id);
+      await ref.read(reservationsRepositoryProvider).setPaymentStatusByAdmin(
+            reservationId: id,
+            paymentStatus: paymentStatus,
+          );
 
       // Notify player when admin flags payment as invalid.
       if (userId.isNotEmpty) {
@@ -366,6 +453,75 @@ class _AdminPendingReservationsScreenState
       );
     }
   }
+
+  Future<void> _viewTimeline(Map<String, dynamic> r) async {
+    final reservationId = r['id']?.toString();
+    if (reservationId == null || reservationId.isEmpty) return;
+    try {
+      final rows = await Supabase.instance.client
+          .from('reservation_history')
+          .select(
+              'changed_at, old_status, new_status, old_date, new_date, old_start_time, new_start_time, old_end_time, new_end_time, notes')
+          .eq('reservation_id', reservationId)
+          .order('changed_at', ascending: false);
+      if (!mounted) return;
+      final history = (rows as List).cast<Map<String, dynamic>>();
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Reservation Timeline'),
+          content: SizedBox(
+            width: 420,
+            child: history.isEmpty
+                ? const Text('No timeline events yet.')
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: history.length,
+                    separatorBuilder: (_, __) => const Divider(height: 12),
+                    itemBuilder: (_, i) {
+                      final h = history[i];
+                      final changedAt =
+                          DateTime.tryParse(h['changed_at']?.toString() ?? '');
+                      final ts = changedAt == null
+                          ? ''
+                          : DateFormat('MMM d, y · h:mm a').format(changedAt);
+                      final oldStatus = h['old_status']?.toString();
+                      final newStatus = h['new_status']?.toString();
+                      final notes = h['notes']?.toString() ?? '';
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(ts, style: AppTypography.labelSmall),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${oldStatus ?? '—'} → ${newStatus ?? '—'}',
+                            style: AppTypography.bodySmall.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          if (notes.isNotEmpty)
+                            Text(notes, style: AppTypography.bodySmall),
+                        ],
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load timeline: $e')),
+        );
+      }
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -383,6 +539,7 @@ class _PendingCard extends StatefulWidget {
     required this.onMarkPaid,
     required this.onViewReceipt,
     required this.onCallUser,
+    required this.onViewTimeline,
   });
 
   final Map<String, dynamic> reservation;
@@ -394,6 +551,7 @@ class _PendingCard extends StatefulWidget {
   final VoidCallback onMarkPaid;
   final VoidCallback onViewReceipt;
   final VoidCallback onCallUser;
+  final VoidCallback onViewTimeline;
 
   @override
   State<_PendingCard> createState() => _PendingCardState();
@@ -421,6 +579,9 @@ class _PendingCardState extends State<_PendingCard> {
     final userInitial = userName.isNotEmpty ? userName[0].toUpperCase() : '?';
     final paymentStatus = (r['payment_status']?.toString() ?? 'UNPAID');
     final hasReceipt = (r['payment_receipt_path']?.toString().isNotEmpty ?? false);
+    final paymentDueAt = DateTime.tryParse(r['payment_due_at']?.toString() ?? '');
+    final showDue = paymentDueAt != null &&
+        (paymentStatus == 'UNPAID' || paymentStatus == 'INVALID');
     final paymentColor = switch (paymentStatus) {
       'PAID' => AppColors.approved,
       'DOWNPAYMENT_PAID' => AppColors.blue600,
@@ -535,6 +696,16 @@ class _PendingCardState extends State<_PendingCard> {
                         ),
                       ],
                     ),
+                    if (showDue) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        'Payment deadline: ${DateFormat('MMM d, h:mm a').format(paymentDueAt)}',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.orange700,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -660,6 +831,12 @@ class _PendingCardState extends State<_PendingCard> {
                 label: 'Edit',
                 color: AppColors.blue600,
                 onTap: widget.onEdit,
+              ),
+              _BigActionButton(
+                icon: Icons.history_rounded,
+                label: 'Timeline',
+                color: AppColors.neutral600,
+                onTap: widget.onViewTimeline,
               ),
               _BigActionButton(
                 icon: Icons.check_circle_rounded,

@@ -10,3 +10,9 @@ verify_jwt = false
 
 [functions.push_notify]
 verify_jwt = false
+
+[functions.expire_unpaid_reservations]
+verify_jwt = false
+
+[functions.send_reminder]
+verify_jwt = false

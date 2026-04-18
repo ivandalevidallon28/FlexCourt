@@ -393,6 +393,12 @@ class _NavGrid extends StatelessWidget {
     route: '/admin/schedule',
     color: AppColors.blue600,
     ),
+    (
+    icon: Icons.sports_basketball_rounded,
+    label: 'Balls',
+    route: '/admin/balls',
+    color: AppColors.orange700,
+    ),
   ];
 
   @override

@@ -44,3 +44,10 @@ final occupiedSlotsProvider = FutureProvider.autoDispose
   );
 });
 
+/// Single reservation details for deep-links (payment / history).
+final reservationByIdProvider = FutureProvider.autoDispose
+    .family<Reservation?, String>((ref, reservationId) async {
+  final repo = ref.read(reservationsRepositoryProvider);
+  return repo.getReservationById(reservationId);
+});
+

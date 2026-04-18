@@ -1,4 +1,32 @@
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+/// Maps API / DB errors to short UI copy (includes ball rental RPC messages).
+String userMessageFromException(Object error) {
+  if (error is PostgrestException) {
+    final m = error.message.toLowerCase();
+    if (m.contains('not available for rental') ||
+        m.contains('not available')) {
+      return 'This ball is already in use or not available.';
+    }
+    if (m.contains('already returned') ||
+        m.contains('not authorized') ||
+        m.contains('rental not found')) {
+      return 'This rental cannot be returned.';
+    }
+    if (error.message.isNotEmpty) return error.message;
+  }
+  return userFriendlyErrorMessage(error);
+}
+
+void showErrorSnackBar(BuildContext context, String message) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(message),
+      backgroundColor: Theme.of(context).colorScheme.error,
+    ),
+  );
+}
 
 /// Returns a short, user-friendly message for UI. Avoids exposing raw exceptions.
 String userFriendlyErrorMessage(Object error, [String? fallback]) {

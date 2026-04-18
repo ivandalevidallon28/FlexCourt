@@ -84,16 +84,34 @@ final adminUsersListProvider =
 
 /// Admin schedule (reservations for a date, optional event type filter).
 final adminScheduleProvider = FutureProvider.autoDispose
-    .family<List<Map<String, dynamic>>, ({String date, String? eventType})>((ref, params) async {
+    .family<List<Map<String, dynamic>>, ({String date, String? categoryId})>((ref, params) async {
   var query = Supabase.instance.client
       .from('reservations')
       .select(
         '*, users:users!reservations_user_id_fkey(name,email), courts(name,sport_type), categories(name)',
       )
       .eq('date', params.date);
-  if (params.eventType != null && params.eventType!.isNotEmpty) {
-    query = query.eq('event_type', params.eventType!);
+  if (params.categoryId != null && params.categoryId!.isNotEmpty) {
+    query = query.eq('category_id', params.categoryId!);
   }
   final res = await query.order('start_time');
+  return (res as List).cast<Map<String, dynamic>>();
+});
+
+/// Admin schedule range (used by weekly calendar mode).
+final adminScheduleRangeProvider = FutureProvider.autoDispose.family<
+    List<Map<String, dynamic>>,
+    ({String startDate, String endDate, String? categoryId})>((ref, params) async {
+  var query = Supabase.instance.client
+      .from('reservations')
+      .select(
+        '*, users:users!reservations_user_id_fkey(name,email), courts(name,sport_type), categories(name)',
+      )
+      .gte('date', params.startDate)
+      .lte('date', params.endDate);
+  if (params.categoryId != null && params.categoryId!.isNotEmpty) {
+    query = query.eq('category_id', params.categoryId!);
+  }
+  final res = await query.order('date').order('start_time');
   return (res as List).cast<Map<String, dynamic>>();
 });

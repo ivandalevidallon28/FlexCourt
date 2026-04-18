@@ -72,7 +72,10 @@ class ReservationChangeService {
     return request;
   }
 
-  /// Player accepts the change. Updates reservation times and marks request ACCEPTED.
+  /// Player accepts the change.
+  /// - Apply new times
+  /// - Set reservation back to PENDING so admin can approve again
+  /// - Mark request ACCEPTED
   /// [notificationId] optional; if null, marks any notification with this change_request_id as read.
   Future<void> acceptChangeRequest({
     required String changeRequestId,
@@ -92,11 +95,16 @@ class ReservationChangeService {
       request.newStartTime,
       request.newEndTime,
     );
+    await _client
+        .from('reservations')
+        .update({'status': 'PENDING'})
+        .eq('id', request.reservationId);
     await _changeRepo.updateStatus(changeRequestId, 'ACCEPTED');
     await _markNotificationReadForChangeRequest(changeRequestId, notificationId);
     await _notificationService.notifyAllAdmins(
-      title: 'Change request accepted',
-      message: 'Player accepted the reservation change request.',
+      title: 'Player accepted new schedule',
+      message:
+          'Player accepted the admin schedule adjustment. Reservation is now pending for re-approval.',
       data: {
         'type': 'CHANGE_REQUEST_ACCEPTED',
         'reservation_id': request.reservationId,
@@ -104,7 +112,9 @@ class ReservationChangeService {
     );
   }
 
-  /// Player rejects the change. Reservation stays unchanged.
+  /// Player rejects the change.
+  /// - Cancel reservation so the slot is released for booking
+  /// - Mark request REJECTED
   /// [notificationId] optional; if null, marks any notification with this change_request_id as read.
   Future<void> rejectChangeRequest({
     required String changeRequestId,
@@ -116,11 +126,16 @@ class ReservationChangeService {
     if (request.playerId != userId) throw Exception('Not your change request');
     if (!request.isPending) throw Exception('This request is no longer pending');
 
+    await _client
+        .from('reservations')
+        .update({'status': 'CANCELLED'})
+        .eq('id', request.reservationId);
     await _changeRepo.updateStatus(changeRequestId, 'REJECTED');
     await _markNotificationReadForChangeRequest(changeRequestId, notificationId);
     await _notificationService.notifyAllAdmins(
-      title: 'Change request rejected',
-      message: 'Player rejected the reservation change request.',
+      title: 'Player declined schedule adjustment',
+      message:
+          'Player declined the admin adjustment. Reservation was cancelled and the slot is now available.',
       data: {
         'type': 'CHANGE_REQUEST_REJECTED',
         'reservation_id': request.reservationId,

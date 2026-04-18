@@ -7,12 +7,15 @@ import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
 import '../../features/courts/presentation/courts_list_screen.dart';
 import '../../features/reservations/presentation/player_reservations_screen.dart';
+import '../../features/reservations/presentation/reservation_details_screen.dart';
 import '../../features/admin/presentation/admin_dashboard_screen.dart';
 import '../../features/admin/presentation/admin_pending_reservations_screen.dart';
 import '../../features/admin/presentation/admin_users_screen.dart';
 import '../../features/admin/presentation/admin_categories_screen.dart';
 import '../../features/admin/presentation/admin_admin_reservations_screen.dart';
 import '../../features/admin/presentation/admin_schedule_screen.dart';
+import '../../features/ball_rental/presentation/admin_balls_screen.dart';
+import '../../features/ball_rental/presentation/ball_rental_list_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -59,12 +62,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const PlayerReservationsScreen(),
       ),
       GoRoute(
+        path: '/reservation/:id',
+        builder: (context, state) => ReservationDetailsScreen(
+          reservationId: state.pathParameters['id']!,
+        ),
+      ),
+      GoRoute(
         path: '/courts',
         builder: (context, state) => const CourtsListScreen(),
       ),
       GoRoute(
         path: '/notifications',
         builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: '/balls',
+        builder: (context, state) => const BallRentalListScreen(),
       ),
       GoRoute(
         path: '/admin',
@@ -89,6 +102,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/admin/schedule',
         builder: (context, state) => const AdminScheduleScreen(),
+      ),
+      GoRoute(
+        path: '/admin/balls',
+        builder: (context, state) => const AdminBallsScreen(),
       ),
     ],
   );

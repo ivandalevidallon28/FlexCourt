@@ -8,7 +8,6 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_design_system.dart';
-import '../../../core/theme/responsive.dart';
 import '../../../core/utils/error_handling.dart';
 import '../../../core/utils/slot_utils.dart';
 import '../../../core/widgets/confirm_dialog.dart';
@@ -19,6 +18,7 @@ import '../../auth/domain/auth_providers.dart';
 import '../../categories/domain/categories_providers.dart';
 import '../../categories/data/category_model.dart';
 import '../../courts/domain/courts_providers.dart';
+import '../../pricing/domain/pricing_providers.dart';
 import '../domain/reservations_providers.dart';
 import '../../courts/data/court_model.dart';
 import '../../reservation_change/data/reservation_change_request_model.dart';
@@ -121,8 +121,20 @@ class _PlayerReservationsScreenState
   ];
 
   static const List<String> _statusOptions = [
-    'ALL', 'PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'ADMIN',
+    'ALL', 'PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'EXPIRED', 'ADMIN',
   ];
+
+  Future<double?> _loadPricePreview() async {
+    if (_startTime == null || _endTime == null) return null;
+    final startStr = _formatTime(_startTime!);
+    final endStr = _formatTime(_endTime!);
+    if (startStr.compareTo(endStr) >= 0) return null;
+    return ref.read(pricingServiceProvider).getBookingPrice(
+          date: _selectedDay,
+          startTime: startStr,
+          endTime: endStr,
+        );
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // Build
@@ -186,6 +198,11 @@ class _PlayerReservationsScreenState
             tooltip: 'Admin Dashboard',
             onPressed: () => context.push('/admin'),
           ),
+        IconButton(
+          icon: const Icon(Icons.sports_basketball_rounded, color: Colors.white, size: 22),
+          tooltip: 'Ball rental',
+          onPressed: () => context.push('/balls'),
+        ),
         IconButton(
           icon: const Icon(Icons.notifications_rounded, color: Colors.white, size: 22),
           tooltip: 'Notifications',
@@ -447,6 +464,49 @@ class _PlayerReservationsScreenState
             focusedBorder: _inputBorder(focused: true),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           ),
+        ),
+        const SizedBox(height: 12),
+        FutureBuilder<double?>(
+          key: ValueKey('${_selectedDay.toIso8601String()}-${_startTime?.hour}-${_endTime?.hour}'),
+          future: _loadPricePreview(),
+          builder: (context, snapshot) {
+            if (_startTime == null || _endTime == null) return const SizedBox.shrink();
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const _LoadingRow(label: 'Calculating total amount…');
+            }
+            if (snapshot.hasError) {
+              return _InfoBanner(
+                icon: Icons.info_outline_rounded,
+                message: 'Could not load price preview right now.',
+                color: AppColors.neutral600,
+              );
+            }
+            final amount = snapshot.data;
+            if (amount == null) return const SizedBox.shrink();
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.blue600.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.blue600.withOpacity(0.2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.payments_rounded, size: 18, color: AppColors.blue600),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Estimated total amount: PHP ${amount.toStringAsFixed(2)}',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.blue800,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
 
         // ── Error message ──────────────────────────────────────────────────
@@ -772,7 +832,7 @@ class _PlayerReservationsScreenState
         final validStart =
             startHour != null && availableStarts.contains(startHour);
         final ends =
-        validStart ? availableEndsFor(occupied, startHour!) : <int>[];
+        validStart ? availableEndsFor(occupied, startHour) : <int>[];
         final validEnd = _endTime != null &&
             validStart &&
             ends.contains(_endTime!.hour);
@@ -1018,8 +1078,10 @@ class _PlayerReservationsScreenState
             changeRequest: request,
             onEdit: () => _editReservationDialog(r),
             onCancel: () => _confirmCancelReservation(r),
+            onOpenDetails: () => context.push('/reservation/${r.id}'),
             onUploadReceipt: () => _uploadReceipt(r),
             onViewReceipt: () => _viewReceipt(r),
+            onViewTimeline: () => _viewTimeline(r),
           );
         },
       ),
@@ -1240,6 +1302,73 @@ class _PlayerReservationsScreenState
             content: Text('Could not open receipt: $e'),
             backgroundColor: Colors.red,
           ),
+        );
+      }
+    }
+  }
+
+  Future<void> _viewTimeline(Reservation r) async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('reservation_history')
+          .select(
+              'changed_at, old_status, new_status, old_date, new_date, old_start_time, new_start_time, old_end_time, new_end_time, notes')
+          .eq('reservation_id', r.id)
+          .order('changed_at', ascending: false);
+      if (!mounted) return;
+      final history = (rows as List).cast<Map<String, dynamic>>();
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Reservation Timeline'),
+          content: SizedBox(
+            width: 420,
+            child: history.isEmpty
+                ? const Text('No timeline events yet.')
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: history.length,
+                    separatorBuilder: (_, __) => const Divider(height: 12),
+                    itemBuilder: (_, i) {
+                      final h = history[i];
+                      final changedAt =
+                          DateTime.tryParse(h['changed_at']?.toString() ?? '');
+                      final ts = changedAt == null
+                          ? ''
+                          : DateFormat('MMM d, y · h:mm a').format(changedAt);
+                      final oldStatus = h['old_status']?.toString();
+                      final newStatus = h['new_status']?.toString();
+                      final notes = h['notes']?.toString() ?? '';
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(ts, style: AppTypography.labelSmall),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${oldStatus ?? '—'} → ${newStatus ?? '—'}',
+                            style: AppTypography.bodySmall.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          if (notes.isNotEmpty)
+                            Text(notes, style: AppTypography.bodySmall),
+                        ],
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load timeline: $e')),
         );
       }
     }
@@ -1866,16 +1995,20 @@ class _ReservationCard extends StatelessWidget {
     required this.changeRequest,
     required this.onEdit,
     required this.onCancel,
+    required this.onOpenDetails,
     required this.onUploadReceipt,
     required this.onViewReceipt,
+    required this.onViewTimeline,
   });
 
   final Reservation reservation;
   final ReservationChangeRequest? changeRequest;
   final VoidCallback onEdit;
   final VoidCallback onCancel;
+  final VoidCallback onOpenDetails;
   final VoidCallback onUploadReceipt;
   final VoidCallback onViewReceipt;
+  final VoidCallback onViewTimeline;
 
   @override
   Widget build(BuildContext context) {
@@ -1890,6 +2023,9 @@ class _ReservationCard extends StatelessWidget {
     };
     final canUpload = r.status != 'CANCELLED' && r.status != 'REJECTED';
     final hasReceipt = (r.paymentReceiptPath ?? '').isNotEmpty;
+    final dueAt = r.paymentDueAt;
+    final showDue = dueAt != null &&
+        (r.paymentStatus == 'UNPAID' || r.paymentStatus == 'INVALID');
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -1994,6 +2130,16 @@ class _ReservationCard extends StatelessWidget {
                               ),
                             ),
                           ),
+                          if (showDue) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              'Pay before ${DateFormat('MMM d, h:mm a').format(dueAt)}',
+                              style: AppTypography.labelSmall.copyWith(
+                                color: AppColors.orange700,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -2020,6 +2166,20 @@ class _ReservationCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                     ],
+                    _ActionIconButton(
+                      icon: Icons.open_in_new_rounded,
+                      color: AppColors.blue600,
+                      tooltip: 'Open details',
+                      onTap: onOpenDetails,
+                    ),
+                    const SizedBox(width: 6),
+                    _ActionIconButton(
+                      icon: Icons.history_rounded,
+                      color: AppColors.neutral600,
+                      tooltip: 'Timeline',
+                      onTap: onViewTimeline,
+                    ),
+                    const SizedBox(width: 6),
                     const Spacer(),
                     if (r.status == 'PENDING') ...[
                       _ActionIconButton(

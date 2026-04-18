@@ -7,6 +7,8 @@ import '../../../core/theme/app_design_system.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/glass_card.dart';
 import '../../../core/widgets/gradient_app_bar.dart';
+import '../../categories/data/category_model.dart';
+import '../../categories/domain/categories_providers.dart';
 import '../domain/admin_providers.dart';
 
 class AdminScheduleScreen extends ConsumerStatefulWidget {
@@ -18,12 +20,9 @@ class AdminScheduleScreen extends ConsumerStatefulWidget {
 
 class _AdminScheduleScreenState extends ConsumerState<AdminScheduleScreen> {
   DateTime _filterDate = DateTime.now();
-  String? _filterEventType;
+  String? _filterCategoryId;
+  bool _weeklyView = false;
   RealtimeChannel? _channel;
-
-  static const List<String> _eventTypes = [
-    'Basketball', 'Volleyball', 'Rent', 'Practice', 'Pickup', 'Other',
-  ];
 
   @override
   void dispose() {
@@ -59,9 +58,25 @@ class _AdminScheduleScreenState extends ConsumerState<AdminScheduleScreen> {
     }
 
     final dateKey = _filterDate.toIso8601String().substring(0, 10);
-    final scheduleAsync = ref.watch(
-      adminScheduleProvider((date: dateKey, eventType: _filterEventType)),
-    );
+    final weekStart = _filterDate.subtract(Duration(days: _filterDate.weekday - 1));
+    final weekEnd = weekStart.add(const Duration(days: 6));
+    final startKey = weekStart.toIso8601String().substring(0, 10);
+    final endKey = weekEnd.toIso8601String().substring(0, 10);
+    final scheduleAsync = _weeklyView
+        ? ref.watch(
+            adminScheduleRangeProvider((
+              startDate: startKey,
+              endDate: endKey,
+              categoryId: _filterCategoryId,
+            )),
+          )
+        : ref.watch(
+            adminScheduleProvider((
+              date: dateKey,
+              categoryId: _filterCategoryId,
+            )),
+          );
+    final categoriesAsync = ref.watch(categoriesListProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -84,14 +99,16 @@ class _AdminScheduleScreenState extends ConsumerState<AdminScheduleScreen> {
             // ── Filter bar ───────────────────────────────────────────────
             _FilterBar(
               filterDate: _filterDate,
-              filterEventType: _filterEventType,
-              eventTypes: _eventTypes,
+              filterCategoryId: _filterCategoryId,
+              categories: categoriesAsync.valueOrNull ?? const <Category>[],
               isToday: _isToday,
+              isWeeklyView: _weeklyView,
               onPrevDay: _prevDay,
               onNextDay: _nextDay,
               onPickDate: _pickDate,
-              onEventTypeChanged: (v) => setState(() => _filterEventType = v),
-              onClearEventType: () => setState(() => _filterEventType = null),
+              onToggleView: (weekly) => setState(() => _weeklyView = weekly),
+              onCategoryChanged: (v) => setState(() => _filterCategoryId = v),
+              onClearCategory: () => setState(() => _filterCategoryId = null),
             ),
 
             // ── List ─────────────────────────────────────────────────────
@@ -102,17 +119,23 @@ class _AdminScheduleScreenState extends ConsumerState<AdminScheduleScreen> {
                     return EmptyState(
                       icon: Icons.event_busy_rounded,
                       title: 'No reservations',
-                      subtitle: _filterEventType != null
-                          ? 'No "$_filterEventType" events on this date.'
-                          : 'Nothing scheduled for this date.',
+                      subtitle: _filterCategoryId != null
+                          ? 'No reservations in this category for selected period.'
+                          : 'Nothing scheduled for this period.',
                     );
+                  }
+                  if (_weeklyView) {
+                    return _buildWeeklySchedule(list, weekStart);
                   }
                   return ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
                     itemCount: list.length,
                     itemBuilder: (context, index) {
                       final r = list[index];
-                      return _ScheduleCard(reservation: r);
+                      return _ScheduleCard(
+                        reservation: r,
+                        onTap: () => _openReservationDetails(r),
+                      );
                     },
                   );
                 },
@@ -153,6 +176,125 @@ class _AdminScheduleScreenState extends ConsumerState<AdminScheduleScreen> {
     );
     if (d != null) setState(() => _filterDate = d);
   }
+
+  Widget _buildWeeklySchedule(List<Map<String, dynamic>> list, DateTime weekStart) {
+    final grouped = <String, List<Map<String, dynamic>>>{};
+    for (var i = 0; i < 7; i++) {
+      final day = weekStart.add(Duration(days: i));
+      grouped[day.toIso8601String().substring(0, 10)] = <Map<String, dynamic>>[];
+    }
+    for (final row in list) {
+      final date = row['date']?.toString();
+      if (date != null && grouped.containsKey(date)) {
+        grouped[date]!.add(row);
+      }
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      children: [
+        for (var i = 0; i < 7; i++) ...[
+          Builder(
+            builder: (context) {
+              final day = weekStart.add(Duration(days: i));
+              final key = day.toIso8601String().substring(0, 10);
+              final rows = grouped[key] ?? const <Map<String, dynamic>>[];
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8, top: 8),
+                    child: Text(
+                      DateFormat('EEE, MMM d').format(day),
+                      style: AppTypography.titleSmall.copyWith(
+                        color: AppColors.blue800,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (rows.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.55),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.neutral300.withOpacity(0.5)),
+                      ),
+                      child: Text(
+                        'No reservations',
+                        style: AppTypography.bodySmall.copyWith(color: AppColors.neutral600),
+                      ),
+                    )
+                  else
+                    ...rows.map(
+                      (r) => _ScheduleCard(
+                        reservation: r,
+                        onTap: () => _openReservationDetails(r),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _openReservationDetails(Map<String, dynamic> r) async {
+    final reservationId = r['id']?.toString() ?? '';
+    if (reservationId.isEmpty) return;
+    final date = r['date']?.toString() ?? '';
+    final startTime = r['start_time']?.toString() ?? '';
+    final endTime = r['end_time']?.toString() ?? '';
+    final status = r['status']?.toString() ?? '';
+    final user = r['users'] as Map<String, dynamic>?;
+    final court = r['courts'] as Map<String, dynamic>?;
+    final category = r['categories'] as Map<String, dynamic>?;
+    final statusColor = AppColors.statusColor(status);
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reservation Details'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Date: $date'),
+              Text('Time: $startTime - $endTime'),
+              Text('Court: ${court?['name'] ?? 'Court'}'),
+              Text('Category: ${category?['name'] ?? r['event_type'] ?? 'N/A'}'),
+              Text('User: ${user?['name'] ?? 'Unknown'}'),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  status,
+                  style: AppTypography.labelSmall.copyWith(
+                    color: statusColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -162,25 +304,29 @@ class _AdminScheduleScreenState extends ConsumerState<AdminScheduleScreen> {
 class _FilterBar extends StatelessWidget {
   const _FilterBar({
     required this.filterDate,
-    required this.filterEventType,
-    required this.eventTypes,
+    required this.filterCategoryId,
+    required this.categories,
     required this.isToday,
+    required this.isWeeklyView,
     required this.onPrevDay,
     required this.onNextDay,
     required this.onPickDate,
-    required this.onEventTypeChanged,
-    required this.onClearEventType,
+    required this.onToggleView,
+    required this.onCategoryChanged,
+    required this.onClearCategory,
   });
 
   final DateTime filterDate;
-  final String? filterEventType;
-  final List<String> eventTypes;
+  final String? filterCategoryId;
+  final List<Category> categories;
   final bool isToday;
+  final bool isWeeklyView;
   final VoidCallback onPrevDay;
   final VoidCallback onNextDay;
   final VoidCallback onPickDate;
-  final ValueChanged<String?> onEventTypeChanged;
-  final VoidCallback onClearEventType;
+  final ValueChanged<bool> onToggleView;
+  final ValueChanged<String?> onCategoryChanged;
+  final VoidCallback onClearCategory;
 
   @override
   Widget build(BuildContext context) {
@@ -241,16 +387,35 @@ class _FilterBar extends StatelessWidget {
 
           const SizedBox(height: 10),
 
-          // ── Event type filter chips ────────────────────────────────────
+          Row(
+            children: [
+              ChoiceChip(
+                label: const Text('Daily'),
+                selected: !isWeeklyView,
+                visualDensity: VisualDensity.compact,
+                onSelected: (_) => onToggleView(false),
+              ),
+              const SizedBox(width: 6),
+              ChoiceChip(
+                label: const Text('Weekly'),
+                selected: isWeeklyView,
+                visualDensity: VisualDensity.compact,
+                onSelected: (_) => onToggleView(true),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // ── Category filter chips ──────────────────────────────────────
           SizedBox(
             height: 32,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: eventTypes.length + 1, // +1 for "All"
+              itemCount: categories.length + 1, // +1 for "All"
               separatorBuilder: (_, __) => const SizedBox(width: 6),
               itemBuilder: (_, i) {
                 if (i == 0) {
-                  final isSelected = filterEventType == null;
+                  final isSelected = filterCategoryId == null;
                   return ChoiceChip(
                     label: const Text('All'),
                     selected: isSelected,
@@ -258,19 +423,20 @@ class _FilterBar extends StatelessWidget {
                     labelStyle: AppTypography.labelSmall.copyWith(
                       fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
                     ),
-                    onSelected: (_) => onClearEventType(),
+                    onSelected: (_) => onClearCategory(),
                   );
                 }
-                final type = eventTypes[i - 1];
-                final isSelected = filterEventType == type;
+                final category = categories[i - 1];
+                final isSelected = filterCategoryId == category.id;
                 return ChoiceChip(
-                  label: Text(type),
+                  label: Text(category.name),
                   selected: isSelected,
                   visualDensity: VisualDensity.compact,
                   labelStyle: AppTypography.labelSmall.copyWith(
                     fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
                   ),
-                  onSelected: (_) => onEventTypeChanged(isSelected ? null : type),
+                  onSelected: (_) =>
+                      onCategoryChanged(isSelected ? null : category.id),
                 );
               },
             ),
@@ -309,8 +475,9 @@ class _NavButton extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ScheduleCard extends StatelessWidget {
-  const _ScheduleCard({required this.reservation});
+  const _ScheduleCard({required this.reservation, required this.onTap});
   final Map<String, dynamic> reservation;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -326,10 +493,13 @@ class _ScheduleCard extends StatelessWidget {
     final userName = user?['name']?.toString() ?? 'Unknown';
     final statusColor = AppColors.statusColor(status);
 
-    return GlassCard(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      child: Row(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: GlassCard(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Status bar accent ──────────────────────────────────────────
@@ -441,6 +611,7 @@ class _ScheduleCard extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }

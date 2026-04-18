@@ -8,6 +8,18 @@ class ReservationsRepository {
 
   ReservationsRepository(this._client);
 
+  /// Fetch a single reservation by id for the current user (RLS protected).
+  /// Returns null if the reservation is not accessible.
+  Future<Reservation?> getReservationById(String reservationId) async {
+    final res = await _client
+        .from('reservations')
+        .select()
+        .eq('id', reservationId)
+        .maybeSingle();
+    if (res == null) return null;
+    return Reservation.fromMap(res);
+  }
+
   /// Normalize time for RPC (PostgreSQL time): "HH:mm" or "HH:mm:ss" -> "HH:mm:00" so PostgREST accepts it.
   static String _normalizeTimeForRpc(String t) {
     final s = t.trim();
@@ -124,6 +136,7 @@ class ReservationsRepository {
       'event_type': eventType,
       'players_count': playersCount,
       'price': price,
+      'total_amount': price,
       'status': status,
     };
     if (categoryId != null) insertPayload['category_id'] = categoryId;
@@ -291,6 +304,9 @@ class ReservationsRepository {
     final adminId = _client.auth.currentUser?.id;
     await _client.from('reservations').update({
       'payment_status': paymentStatus,
+      'paid_at': (paymentStatus == 'PAID' || paymentStatus == 'DOWNPAYMENT_PAID')
+          ? DateTime.now().toIso8601String()
+          : null,
       'payment_review_note': reviewNote?.trim().isEmpty == true ? null : reviewNote?.trim(),
       'payment_reviewed_by': adminId,
       'payment_reviewed_at': DateTime.now().toIso8601String(),
