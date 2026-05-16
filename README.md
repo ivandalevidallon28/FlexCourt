@@ -1,4 +1,4 @@
-# court_side
+# FlexCourt
 
 A new Flutter project.
 

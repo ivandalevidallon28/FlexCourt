@@ -1,8 +1,8 @@
-/// CourtSide design system — single import for all tokens.
+/// FlexCourt design system — single import for all tokens.
 ///
 /// Usage:
 /// ```dart
-/// import 'package:court_side/core/theme/app_design_system.dart';
+/// import 'package:flexcourt/core/theme/app_design_system.dart';
 ///
 /// // Colors
 /// Container(color: AppColors.blue500);

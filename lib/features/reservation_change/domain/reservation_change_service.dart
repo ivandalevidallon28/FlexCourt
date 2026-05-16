@@ -56,7 +56,7 @@ class ReservationChangeService {
       message: message,
       expiresAt: expiresAt,
     );
-    debugPrint('[CourtSide] Change request created: ${request.id} for reservation $reservationId');
+    debugPrint('[FlexCourt] Change request created: ${request.id} for reservation $reservationId');
     // Notification is inserted by DB trigger notify_on_change_request_insert (so Notifications page shows it).
     await _notificationService.pushOnlyToUser(
       userId: playerId,

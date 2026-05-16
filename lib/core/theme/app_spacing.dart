@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// CourtSide design system — spacing scale (4–8 base).
+/// FlexCourt design system — spacing scale (4–8 base).
 class AppSpacing {
   AppSpacing._();
 

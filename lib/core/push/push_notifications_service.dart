@@ -19,9 +19,9 @@ class PushNotificationsService {
       FlutterLocalNotificationsPlugin();
   static const AndroidNotificationChannel _defaultChannel =
       AndroidNotificationChannel(
-    'courtside_default_channel',
-    'CourtSide Notifications',
-    description: 'General CourtSide alerts and updates',
+    'flexcourt_default_channel',
+    'FlexCourt Notifications',
+    description: 'General FlexCourt alerts and updates',
     importance: Importance.high,
   );
   bool _initialized = false;
@@ -50,7 +50,7 @@ class PushNotificationsService {
       try {
         router.go(_pendingRoute!);
       } catch (e) {
-        debugPrint('[CourtSide] Pending route navigation failed: $e');
+        debugPrint('[FlexCourt] Pending route navigation failed: $e');
       } finally {
         _pendingRoute = null;
       }
@@ -91,7 +91,7 @@ class PushNotificationsService {
         'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'token');
     } catch (e) {
-      debugPrint('[CourtSide] Push token sync failed: $e');
+      debugPrint('[FlexCourt] Push token sync failed: $e');
     }
   }
 
@@ -128,9 +128,9 @@ class PushNotificationsService {
     final reservationId = (message.data['reservation_id'] ?? '').toString();
     final details = const NotificationDetails(
       android: AndroidNotificationDetails(
-        'courtside_default_channel',
-        'CourtSide Notifications',
-        channelDescription: 'General CourtSide alerts and updates',
+        'flexcourt_default_channel',
+        'FlexCourt Notifications',
+        channelDescription: 'General FlexCourt alerts and updates',
         importance: Importance.high,
         priority: Priority.high,
       ),
@@ -143,7 +143,7 @@ class PushNotificationsService {
 
     await _localNotifications.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title ?? 'CourtSide',
+      title ?? 'FlexCourt',
       body ?? '',
       details,
       payload: payload,
@@ -201,7 +201,7 @@ class PushNotificationsService {
     try {
       router.go(route);
     } catch (e) {
-      debugPrint('[CourtSide] Push route navigation failed: $e');
+      debugPrint('[FlexCourt] Push route navigation failed: $e');
     }
   }
 }

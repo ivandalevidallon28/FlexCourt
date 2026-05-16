@@ -16,11 +16,11 @@ Future<void> main() async {
     anonKey: Env.supabaseAnonKey,
   );
 
-  runApp(const ProviderScope(child: CourtSideApp()));
+  runApp(const ProviderScope(child: FlexCourtApp()));
 }
 
-class CourtSideApp extends ConsumerWidget {
-  const CourtSideApp({super.key});
+class FlexCourtApp extends ConsumerWidget {
+  const FlexCourtApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -31,7 +31,7 @@ class CourtSideApp extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
-      title: 'CourtSide',
+      title: 'FlexCourt',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,

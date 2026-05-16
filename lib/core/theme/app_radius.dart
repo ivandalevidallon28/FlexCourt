@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// CourtSide design system — border radius values.
+/// FlexCourt design system — border radius values.
 class AppRadius {
   AppRadius._();
 

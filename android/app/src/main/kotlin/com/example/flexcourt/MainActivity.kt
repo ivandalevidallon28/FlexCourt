@@ -1,4 +1,4 @@
-package com.example.court_side
+package com.example.flexcourt
 
 import io.flutter.embedding.android.FlutterActivity
 

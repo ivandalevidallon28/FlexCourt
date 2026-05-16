@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// CourtSide design system — typography scale.
+/// FlexCourt design system — typography scale.
 class AppTypography {
   AppTypography._();
 

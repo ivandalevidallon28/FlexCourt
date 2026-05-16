@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// CourtSide design system — color palette.
+/// FlexCourt design system — color palette.
 /// Blue (primary), Orange (secondary), Yellow (accent), Green (success).
 class AppColors {
   AppColors._();

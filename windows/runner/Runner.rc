@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "court_side" "\0"
+            VALUE "FileDescription", "FlexCourt" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "court_side" "\0"
+            VALUE "InternalName", "flexcourt" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "court_side.exe" "\0"
-            VALUE "ProductName", "court_side" "\0"
+            VALUE "OriginalFilename", "flexcourt.exe" "\0"
+            VALUE "ProductName", "FlexCourt" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

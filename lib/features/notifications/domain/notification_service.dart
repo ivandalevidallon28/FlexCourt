@@ -89,14 +89,14 @@ class NotificationService {
     try {
       final session = _client.auth.currentSession;
       if (session == null) {
-        debugPrint('[CourtSide] Push skipped: no active session');
+        debugPrint('[FlexCourt] Push skipped: no active session');
         return;
       }
 
       // Validate current auth token before invoking JWT-protected Edge Function.
       final authCheck = await _client.auth.getUser();
       if (authCheck.user == null) {
-        debugPrint('[CourtSide] Push skipped: invalid/expired auth session');
+        debugPrint('[FlexCourt] Push skipped: invalid/expired auth session');
         return;
       }
 
@@ -107,7 +107,7 @@ class NotificationService {
         if (data != null) 'data': data,
       });
     } catch (e) {
-      debugPrint('[CourtSide] Push invoke failed: $e');
+      debugPrint('[FlexCourt] Push invoke failed: $e');
     }
   }
 
@@ -193,10 +193,10 @@ class NotificationService {
           'change_request_id': changeRequestId,
         },
       );
-      debugPrint('[CourtSide] Notification inserted: reservation_change_request for user $userId');
+      debugPrint('[FlexCourt] Notification inserted: reservation_change_request for user $userId');
     } catch (e, st) {
-      debugPrint('[CourtSide] Notification insert failed: $e');
-      debugPrint('[CourtSide] Stack: $st');
+      debugPrint('[FlexCourt] Notification insert failed: $e');
+      debugPrint('[FlexCourt] Stack: $st');
       rethrow;
     }
   }

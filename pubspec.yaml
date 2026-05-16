@@ -1,4 +1,4 @@
-name: court_side
+name: flexcourt
 description: Sports court reservation system (Flutter + Supabase)
 publish_to: "none"
 

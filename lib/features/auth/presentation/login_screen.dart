@@ -70,7 +70,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           child: Column(
             children: [
               GradientAppBar(
-                title: 'CourtSide',
+                title: 'FlexCourt',
                 actions: const [AppBarThemeToggle()],
               ),
               Expanded(
