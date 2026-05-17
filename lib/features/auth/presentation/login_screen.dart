@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_design_system.dart';
 import '../../../core/theme/responsive.dart';
 import '../../../core/utils/error_handling.dart';
+import '../../../core/widgets/flexcourt_logo.dart';
 import '../../../core/widgets/glass_card.dart';
 import '../../../core/widgets/gradient_app_bar.dart';
 import '../domain/auth_providers.dart';
@@ -70,7 +71,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           child: Column(
             children: [
               GradientAppBar(
-                title: 'FlexCourt',
+                title: const FlexCourtLogo(height: 40),
                 actions: const [AppBarThemeToggle()],
               ),
               Expanded(
@@ -94,6 +95,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
+                              const Center(
+                                child: FlexCourtLogo(height: 112),
+                              ),
+                              AppSpacing.gapMdV,
                               Text(
                                 'Sign in',
                                 style: AppTypography.headlineMedium.copyWith(
