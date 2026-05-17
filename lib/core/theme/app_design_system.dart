@@ -1,11 +1,14 @@
 /// FlexCourt design system — single import for all tokens.
 ///
+/// Brand palette: midnight navy → deep royal → strong / electric / sky blue,
+/// ice white highlights, cool gray borders. See [AppColors] for named swatches.
+///
 /// Usage:
 /// ```dart
 /// import 'package:flexcourt/core/theme/app_design_system.dart';
 ///
 /// // Colors
-/// Container(color: AppColors.blue500);
+/// Container(color: AppColors.electricBlue);
 /// Text('Status', style: TextStyle(color: AppColors.approved));
 ///
 /// // Typography

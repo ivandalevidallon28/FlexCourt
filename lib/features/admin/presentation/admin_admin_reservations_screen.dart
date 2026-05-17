@@ -69,11 +69,7 @@ class _AdminAdminReservationsScreenState
         decoration: BoxDecoration(
           gradient: isDark
               ? AppColors.surfaceGradientDark
-              : const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFE0F2FE), Color(0xFFF0F9FF), Color(0xFFE0F2FE)],
-          ),
+              : AppColors.surfaceGradientLight,
         ),
         child: asyncData.when(
           data: (list) {

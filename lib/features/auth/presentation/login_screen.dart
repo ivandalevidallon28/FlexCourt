@@ -7,6 +7,7 @@ import '../../../core/theme/app_design_system.dart';
 import '../../../core/theme/responsive.dart';
 import '../../../core/utils/error_handling.dart';
 import '../../../core/widgets/flexcourt_logo.dart';
+import '../../../core/widgets/flexcourt_wordmark.dart';
 import '../../../core/widgets/glass_card.dart';
 import '../../../core/widgets/gradient_app_bar.dart';
 import '../domain/auth_providers.dart';
@@ -57,21 +58,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         decoration: BoxDecoration(
           gradient: isDark
               ? AppColors.surfaceGradientDark
-              : const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFFE0F2FE),
-                    Color(0xFFF0F9FF),
-                    Color(0xFFE0F2FE),
-                  ],
-                ),
+              : AppColors.surfaceGradientLight,
         ),
         child: SafeArea(
           child: Column(
             children: [
               GradientAppBar(
-                title: const FlexCourtLogo(height: 40),
+                title: const FlexCourtWordmark(
+                  variant: FlexCourtWordmarkVariant.appBar,
+                ),
                 actions: const [AppBarThemeToggle()],
               ),
               Expanded(
@@ -99,6 +94,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                 child: FlexCourtLogo(height: 112),
                               ),
                               AppSpacing.gapMdV,
+                              const Center(
+                                child: FlexCourtWordmark(
+                                  variant: FlexCourtWordmarkVariant.hero,
+                                ),
+                              ),
+                              AppSpacing.gapLgV,
                               Text(
                                 'Sign in',
                                 style: AppTypography.headlineMedium.copyWith(

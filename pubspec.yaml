@@ -42,7 +42,7 @@ flutter_launcher_icons:
     generate: true
   image_path: lib/flexCourtLogo.png
   remove_alpha_ios: true
-  adaptive_icon_background: "#E0F2FE"
+  adaptive_icon_background: "#E6F2FC"
   adaptive_icon_foreground: lib/flexCourtLogo.png
 
 flutter:

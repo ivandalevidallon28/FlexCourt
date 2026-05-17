@@ -53,11 +53,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
         decoration: BoxDecoration(
           gradient: isDark
               ? AppColors.surfaceGradientDark
-              : const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFE0F2FE), Color(0xFFF0F9FF), Color(0xFFE0F2FE)],
-          ),
+              : AppColors.surfaceGradientLight,
         ),
         child: usersAsync.when(
           data: (list) {
@@ -424,7 +420,7 @@ class _HistorySheet extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        color: isDark ? AppColors.surfaceCardDark : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(

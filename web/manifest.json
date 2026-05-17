@@ -3,9 +3,9 @@
     "short_name": "FlexCourt",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#001F50",
+    "theme_color": "#1050B0",
+    "description": "Sports court reservation — FlexCourt",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

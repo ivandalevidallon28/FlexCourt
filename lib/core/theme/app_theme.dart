@@ -26,10 +26,10 @@ class AppTheme {
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.blue600,
+            backgroundColor: AppColors.strongBlue,
             foregroundColor: Colors.white,
             elevation: 2,
-            shadowColor: AppColors.blue600.withOpacity(0.4),
+            shadowColor: AppColors.deepRoyal.withValues(alpha: 0.35),
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.lg,
               vertical: AppSpacing.md,
@@ -42,8 +42,8 @@ class AppTheme {
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.blue600,
-            side: const BorderSide(color: AppColors.blue400),
+            foregroundColor: AppColors.strongBlue,
+            side: const BorderSide(color: AppColors.electricBlue),
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.lg,
               vertical: AppSpacing.sm,
@@ -55,20 +55,20 @@ class AppTheme {
         ),
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
-            foregroundColor: AppColors.blue600,
+            foregroundColor: AppColors.strongBlue,
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: AppColors.neutral100,
+          fillColor: AppColors.iceWhite,
           border: OutlineInputBorder(borderRadius: AppRadius.radiusMd),
           enabledBorder: OutlineInputBorder(
             borderRadius: AppRadius.radiusMd,
-            borderSide: const BorderSide(color: AppColors.neutral300),
+            borderSide: BorderSide(color: AppColors.coolGray.withValues(alpha: 0.35)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: AppRadius.radiusMd,
-            borderSide: const BorderSide(color: AppColors.blue500, width: 2),
+            borderSide: const BorderSide(color: AppColors.electricBlue, width: 2),
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: AppRadius.radiusMd,
@@ -79,14 +79,14 @@ class AppTheme {
             vertical: AppSpacing.md,
           ),
         ),
-    cardTheme: CardThemeData(
-      elevation: 2,
-      shadowColor: Colors.black26,
-      shape: RoundedRectangleBorder(borderRadius: AppRadius.radiusLg),
-      color: Colors.white,
-      margin: const EdgeInsets.only(bottom: AppSpacing.listItemGap),
-      clipBehavior: Clip.antiAlias,
-    ),
+        cardTheme: CardThemeData(
+          elevation: 2,
+          shadowColor: AppColors.midnightNavy.withValues(alpha: 0.12),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.radiusLg),
+          color: Colors.white,
+          margin: const EdgeInsets.only(bottom: AppSpacing.listItemGap),
+          clipBehavior: Clip.antiAlias,
+        ),
         listTileTheme: ListTileThemeData(
           contentPadding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
@@ -96,7 +96,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(borderRadius: AppRadius.radiusMd),
         ),
         chipTheme: ChipThemeData(
-          backgroundColor: AppColors.blue50,
+          backgroundColor: AppColors.iceWhite,
           selectedColor: AppColors.blue200,
           labelStyle: AppTypography.labelMedium,
           padding: const EdgeInsets.symmetric(
@@ -128,10 +128,10 @@ class AppTheme {
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.cyan500,
-            foregroundColor: const Color(0xFF0F172A),
+            backgroundColor: AppColors.electricBlue,
+            foregroundColor: Colors.white,
             elevation: 2,
-            shadowColor: AppColors.cyan500.withOpacity(0.5),
+            shadowColor: AppColors.electricBlue.withValues(alpha: 0.45),
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.lg,
               vertical: AppSpacing.md,
@@ -144,8 +144,8 @@ class AppTheme {
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.cyan400,
-            side: const BorderSide(color: AppColors.cyan500),
+            foregroundColor: AppColors.skyBlue,
+            side: const BorderSide(color: AppColors.electricBlue),
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.lg,
               vertical: AppSpacing.sm,
@@ -157,7 +157,7 @@ class AppTheme {
         ),
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
-            foregroundColor: AppColors.cyan400,
+            foregroundColor: AppColors.skyBlue,
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
@@ -166,11 +166,13 @@ class AppTheme {
           border: OutlineInputBorder(borderRadius: AppRadius.radiusMd),
           enabledBorder: OutlineInputBorder(
             borderRadius: AppRadius.radiusMd,
-            borderSide: const BorderSide(color: AppColors.neutral200Dark),
+            borderSide: BorderSide(
+              color: AppColors.coolGray.withValues(alpha: 0.4),
+            ),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: AppRadius.radiusMd,
-            borderSide: const BorderSide(color: AppColors.cyan500, width: 2),
+            borderSide: const BorderSide(color: AppColors.skyBlue, width: 2),
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: AppRadius.radiusMd,
@@ -181,14 +183,14 @@ class AppTheme {
             vertical: AppSpacing.md,
           ),
         ),
-    cardTheme: CardThemeData(
-      elevation: 2,
-      shadowColor: Colors.black45,
-      shape: RoundedRectangleBorder(borderRadius: AppRadius.radiusLg),
-      color: AppColors.neutral100Dark,
-      margin: const EdgeInsets.only(bottom: AppSpacing.listItemGap),
-      clipBehavior: Clip.antiAlias,
-    ),
+        cardTheme: CardThemeData(
+          elevation: 2,
+          shadowColor: Colors.black45,
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.radiusLg),
+          color: AppColors.neutral100Dark,
+          margin: const EdgeInsets.only(bottom: AppSpacing.listItemGap),
+          clipBehavior: Clip.antiAlias,
+        ),
         listTileTheme: ListTileThemeData(
           contentPadding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
@@ -200,46 +202,46 @@ class AppTheme {
       );
 
   static ColorScheme get _lightColorScheme => ColorScheme.light(
-        primary: AppColors.blue600,
+        primary: AppColors.strongBlue,
         onPrimary: Colors.white,
-        primaryContainer: AppColors.blue100,
-        onPrimaryContainer: AppColors.blue900,
+        primaryContainer: AppColors.iceWhite,
+        onPrimaryContainer: AppColors.midnightNavy,
         secondary: AppColors.orange500,
         onSecondary: Colors.white,
         secondaryContainer: AppColors.orange100,
         onSecondaryContainer: AppColors.orange900,
-        tertiary: AppColors.cyan600,
+        tertiary: AppColors.electricBlue,
         onTertiary: Colors.white,
-        tertiaryContainer: AppColors.blue50,
-        onTertiaryContainer: AppColors.blue900,
+        tertiaryContainer: AppColors.blue100,
+        onTertiaryContainer: AppColors.deepRoyal,
         error: AppColors.error,
         onError: Colors.white,
-        surface: const Color(0xFFF8FAFC),
-        onSurface: AppColors.neutral900,
+        surface: AppColors.iceWhite,
+        onSurface: AppColors.midnightNavy,
         surfaceContainerHighest: AppColors.neutral100,
-        onSurfaceVariant: AppColors.neutral600,
+        onSurfaceVariant: AppColors.coolGray,
         outline: AppColors.neutral400,
       );
 
   static ColorScheme get _darkColorScheme => ColorScheme.dark(
-        primary: AppColors.cyan500,
-        onPrimary: const Color(0xFF0F172A),
-        primaryContainer: AppColors.cyan600,
-        onPrimaryContainer: AppColors.cyan400,
+        primary: AppColors.electricBlue,
+        onPrimary: Colors.white,
+        primaryContainer: AppColors.deepRoyal,
+        onPrimaryContainer: AppColors.iceWhite,
         secondary: AppColors.orange400,
         onSecondary: AppColors.orange900,
         secondaryContainer: AppColors.orange800,
         onSecondaryContainer: AppColors.orange100,
-        tertiary: AppColors.cyan400,
-        onTertiary: const Color(0xFF0F172A),
-        tertiaryContainer: AppColors.cyan600,
-        onTertiaryContainer: AppColors.cyan400,
+        tertiary: AppColors.skyBlue,
+        onTertiary: AppColors.midnightNavy,
+        tertiaryContainer: AppColors.strongBlue,
+        onTertiaryContainer: AppColors.iceWhite,
         error: AppColors.error,
         onError: Colors.white,
-        surface: const Color(0xFF0F172A),
-        onSurface: AppColors.neutral900Dark,
-        surfaceContainerHighest: const Color(0xFF1E293B),
-        onSurfaceVariant: AppColors.neutral500,
+        surface: AppColors.midnightNavy,
+        onSurface: AppColors.iceWhite,
+        surfaceContainerHighest: AppColors.deepRoyal,
+        onSurfaceVariant: AppColors.coolGray,
         outline: AppColors.neutral600,
       );
 

@@ -36,8 +36,8 @@ class GradientAppBar extends StatelessWidget implements PreferredSizeWidget {
             : AppColors.primaryGradientLight,
         boxShadow: [
           BoxShadow(
-            color: (isDark ? AppColors.cyan500 : AppColors.blue600)
-                .withOpacity(0.25),
+            color: (isDark ? AppColors.strongBlue : AppColors.deepRoyal)
+                .withValues(alpha: 0.28),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
